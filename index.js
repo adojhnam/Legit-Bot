@@ -1,7 +1,6 @@
-/***********************
- *  BASIC SETUP
- ***********************/
 require("dotenv").config();
+const fs = require("fs");
+const archiver = require("archiver");
 
 const {
   Client,
@@ -17,28 +16,32 @@ const {
   Events,
   SlashCommandBuilder,
   REST,
-  Routes
+  Routes,
+  PermissionFlagsBits,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 /***********************
- *  ⭐⭐ THINGS YOU MUST CHANGE ⭐⭐
+ * ⭐ THINGS YOU MUST CHANGE (إذا بدك)
  ***********************/
-
-// ⭐ ID of the CATEGORY where tickets will be created
 const TICKET_CATEGORY_ID = "1414954122918236171";
-
-// ⭐ ID of the channel where ticket logs will be sent
 const LOG_CHANNEL_ID = "1470080063792742410";
-
-// ⭐ Guild (Server) ID
 const GUILD_ID = "1412911390494036072";
+const STAFF_ROLE_ID = "1414301511579598858";
+
+const PAYPAL_INFO = "<:paypal:1430875512221339680> Paypal: Ahmdla9.ahmad@gmail.com";
+const BINANCE_INFO = "<:binance:1430875529539489932> Binance ID: 993881216";
 
 /***********************
- *  BOT READY
+ * READY
  ***********************/
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -46,121 +49,124 @@ client.once(Events.ClientReady, () => {
 });
 
 /***********************
- *  SLASH COMMANDS REGISTRATION
+ * REGISTER COMMANDS (Admin Only)
  ***********************/
 async function registerCommands() {
   const commands = [
     new SlashCommandBuilder()
-      .setName("ticketpanel") // 🔧 you can change command name
-      .setDescription("Open ticket panel"),
+      .setName("ticketpanel")
+      .setDescription("Open ticket panel")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
-      .setName("close") // 🔧 change if you want
-      .setDescription("Close the current ticket"),
+      .setName("close")
+      .setDescription("Close ticket")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
-      .setName("payment") // 🔧 change if you want
-      .setDescription("Show payment methods")
-  ].map(cmd => cmd.toJSON());
+      .setName("paypal")
+      .setDescription("Show PayPal")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("binance")
+      .setDescription("Show Binance")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-
   await rest.put(
     Routes.applicationGuildCommands(client.user.id, GUILD_ID),
     { body: commands }
   );
 
-  console.log("✅ Slash commands registered");
+  console.log("✅ Commands registered");
 }
 
 /***********************
- *  INTERACTIONS
+ * INTERACTIONS
  ***********************/
 client.on(Events.InteractionCreate, async interaction => {
 
-  /******** SLASH COMMANDS ********/
+  /* SLASH COMMANDS */
   if (interaction.isChatInputCommand()) {
 
-    /* 🎫 TICKET PANEL */
-    if (interaction.commandName === "ticketpanel") {
+    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
+      return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
 
+    // Ticket Panel
+    if (interaction.commandName === "ticketpanel") {
       const embed = new EmbedBuilder()
-        .setTitle("🎫 Tickets") // 🔧 change title
-        .setDescription("Choose the type of ticket you want to open") // 🔧 change text
+        .setTitle("🎫 Ticket System")
+        .setDescription("Choose ticket type")
         .setColor("Blue");
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_buy")
-          .setLabel(":buy: Purchase") // 🔧 button name
-          .setStyle(ButtonStyle.Primary),
+      const menu = new StringSelectMenuBuilder()
+        .setCustomId("ticket_select")
+        .setPlaceholder("Select ticket type")
+        .addOptions(
+          {
+            label: "Purchase",
+            value: "purchase",
+            emoji: { id: "1438808044346675290" }
+          },
+          {
+            label: "Seller Application",
+            value: "seller",
+            emoji: "📦"
+          },
+          {
+            label: "Report Scammer",
+            value: "report",
+            emoji: "🚨"
+          }
+        );
 
-        new ButtonBuilder()
-          .setCustomId("ticket_seller")
-          .setLabel(":page_facing_up: Seller Application")
-          .setStyle(ButtonStyle.Secondary),
-
-        new ButtonBuilder()
-          .setCustomId("ticket_report")
-          .setLabel("🚨 Report Scammer")
-          .setStyle(ButtonStyle.Danger)
-      );
-
+      const row = new ActionRowBuilder().addComponents(menu);
       return interaction.reply({ embeds: [embed], components: [row] });
     }
 
-    /* ❌ CLOSE TICKET */
+    // PayPal
+    if (interaction.commandName === "paypal")
+      return interaction.reply(PAYPAL_INFO);
+
+    // Binance
+    if (interaction.commandName === "binance")
+      return interaction.reply(BINANCE_INFO);
+
+    // Close
     if (interaction.commandName === "close") {
-      await interaction.reply("🔒 Closing ticket...");
-      setTimeout(() => {
-        interaction.channel.delete().catch(() => {});
-      }, 3000);
-    }
-
-    /* 💳 PAYMENT METHODS */
-    if (interaction.commandName === "payment") {
-      const embed = new EmbedBuilder()
-        .setTitle("💳 Payment Methods") // 🔧 edit freely
-        .setDescription(
-          "• :paypal: PayPal" +
-          "• :binance: Crypto" +
-          "• 🏦 Bank Transfer"
-        )
-        .setColor("Light Blue");
-
-      return interaction.reply({ embeds: [embed] });
+      if (!interaction.channel.name.startsWith("purchase") &&
+          !interaction.channel.name.startsWith("seller") &&
+          !interaction.channel.name.startsWith("report")) {
+        return interaction.reply({ content: "❌ This is not a ticket channel.", ephemeral: true });
+      }
+      await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
+      return closeTicket(interaction.channel, interaction.user);
     }
   }
 
-  /******** BUTTONS ********/
-  if (interaction.isButton()) {
+  /* SELECT MENU */
+  if (interaction.isStringSelectMenu()) {
+    const choice = interaction.values[0];
 
-    /* ❌ CLOSE BUTTON */
-    if (interaction.customId === "close_ticket") {
-      await interaction.reply({ content: "🔒 Ticket will close in 5 seconds", ephemeral: true });
-      setTimeout(() => {
-        interaction.channel.delete().catch(() => {});
-      }, 5000);
-    }
-
-    /* 🛒 PURCHASE */
-    if (interaction.customId === "ticket_buy") {
+    if (choice === "purchase") {
       const modal = new ModalBuilder()
-        .setCustomId("buy_modal")
-        .setTitle("🛒 Purchase Ticket");
+        .setCustomId("purchase_modal")
+        .setTitle("Purchase");
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("product")
-            .setLabel("What are you looking to buy ?") // 🔧
+            .setLabel("Product")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("payment")
-            .setLabel("What will you pay with ?") // 🔧
+            .setLabel("Payment method")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         )
@@ -169,24 +175,23 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.showModal(modal);
     }
 
-    /* 💼 SELLER */
-    if (interaction.customId === "ticket_seller") {
+    if (choice === "seller") {
       const modal = new ModalBuilder()
         .setCustomId("seller_modal")
-        .setTitle("💼 Seller Application");
+        .setTitle("Seller Application");
 
       modal.addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("items")
-            .setLabel("Items you are looking to sell ( with price )")
+            .setLabel("Items & prices")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("proof")
-            .setLabel("Proofs that you are trusted")
+            .setLabel("Why should we trust you?")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         )
@@ -195,74 +200,120 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.showModal(modal);
     }
 
-    /* 🚨 REPORT */
-    if (interaction.customId === "ticket_report") {
-      createTicket(interaction, `🚨-report-${interaction.user.username}`, "Scam Report");
+    if (choice === "report") {
+      return createTicket(interaction, "Report", ["🚨 Scam report"]);
     }
   }
 
-  /******** MODALS ********/
+  /* MODALS */
   if (interaction.isModalSubmit()) {
-
-    if (interaction.customId === "buy_modal") {
-      const product = interaction.fields.getTextInputValue("product");
-      createTicket(
-        interaction,
-        `🛒-${product}-${interaction.user.username}`,
-        "Purchase"
-      );
+    if (interaction.customId === "purchase_modal") {
+      await createTicket(interaction, "Purchase", [
+        `🛒 ${interaction.fields.getTextInputValue("product")}`,
+        `💳 ${interaction.fields.getTextInputValue("payment")}`
+      ]);
     }
 
     if (interaction.customId === "seller_modal") {
-      createTicket(
-        interaction,
-        `💼-seller-${interaction.user.username}`,
-        "Seller Application"
-      );
+      await createTicket(interaction, "Seller", [
+        interaction.fields.getTextInputValue("items"),
+        interaction.fields.getTextInputValue("proof")
+      ]);
     }
+  }
+
+  /* CLOSE BUTTON */
+  if (interaction.isButton() && interaction.customId === "close_ticket") {
+    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
+      return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
+
+    if (!interaction.channel.name.startsWith("purchase") &&
+        !interaction.channel.name.startsWith("seller") &&
+        !interaction.channel.name.startsWith("report")) {
+      return interaction.reply({ content: "❌ This is not a ticket channel.", ephemeral: true });
+    }
+
+    await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
+    closeTicket(interaction.channel, interaction.user);
   }
 });
 
 /***********************
- *  CREATE TICKET FUNCTION
+ * CREATE TICKET
  ***********************/
-async function createTicket(interaction, name, type) {
+async function createTicket(interaction, type, details) {
   const channel = await interaction.guild.channels.create({
-    name,
+    name: `${type}-${interaction.user.username}`.toLowerCase().replace(/ /g, "-"),
     type: ChannelType.GuildText,
     parent: TICKET_CATEGORY_ID,
     permissionOverwrites: [
       { id: interaction.guild.roles.everyone.id, deny: ["ViewChannel"] },
-      { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] }
+      { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] },
+      { id: STAFF_ROLE_ID, allow: ["ViewChannel", "SendMessages"] }
     ]
   });
 
-  const closeRow = new ActionRowBuilder().addComponents(
+  const embed = new EmbedBuilder()
+    .setTitle(`🎫 ${type}`)
+    .setDescription(details.join("\n\n"))
+    .setColor("Green");
+
+  const closeBtn = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("close_ticket")
-      .setLabel("❌ Close Ticket")
+      .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({
-    content: `🎫 **${type} Ticket**\nUser: ${interaction.user}`,
-    components: [closeRow]
-  });
-
-  const logChannel = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (logChannel) {
-    logChannel.send(
-      `📑 **New Ticket**\nType: ${type}\nUser: ${interaction.user.tag}\nChannel: ${channel}`
-    );
-  }
-
+  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [closeBtn] });
   await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
 }
 
 /***********************
- *  LOGIN
+ * CLOSE + LOG
+ ***********************/
+async function closeTicket(channel, closer) {
+  const messages = await channel.messages.fetch({ limit: 100 });
+  let text = "";
+
+  messages.reverse().forEach(m => {
+    text += `[${m.author.tag}] ${m.content}\n`;
+  });
+
+  const file = `ticket-${channel.id}.txt`;
+  fs.writeFileSync(file, text);
+
+  const zip = `ticket-${channel.id}.zip`;
+  const output = fs.createWriteStream(zip);
+  const archive = archiver("zip");
+
+  archive.pipe(output);
+  archive.file(file, { name: file });
+  await archive.finalize();
+
+  const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
+  if (log) {
+    const embed = new EmbedBuilder()
+      .setTitle("🎫 Ticket Closed")
+      .setDescription(`Closed by ${closer.tag}`)
+      .setColor("Red");
+
+    log.send({ embeds: [embed], files: [zip] });
+  }
+
+  setTimeout(() => channel.delete().catch(() => {}), 3000);
+}
+
+/***********************
+ * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
+
+
+
+
+
 
 
 
