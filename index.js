@@ -57,7 +57,11 @@ async function registerCommands() {
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
+{
+  name: 'payment-methods',
+  description: 'Toggle payment methods panel',
+  defaultMemberPermissions: PermissionFlagsBits.Administrator
+}
     new SlashCommandBuilder()
       .setName("close")
       .setDescription("Close ticket")
@@ -308,6 +312,7 @@ async function closeTicket(channel, closer) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
