@@ -30,15 +30,15 @@ const client = new Client({
 });
 
 /***********************
- * ⭐ THINGS YOU MUST CHANGE (إذا بدك)
+ * ⭐ CONFIG (زي ما هي)
  ***********************/
 const TICKET_CATEGORY_ID = "1414954122918236171";
 const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
 const STAFF_ROLE_ID = "1414301511579598858";
 
-const PAYPAL_INFO = "<:paypal:1430875512221339680> Paypal: Ahmdla9.ahmad@gmail.com";
-const BINANCE_INFO = "<:binance:1430875529539489932> Binance ID: 993881216";
+const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
+const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
 /***********************
  * READY
@@ -49,7 +49,7 @@ client.once(Events.ClientReady, () => {
 });
 
 /***********************
- * REGISTER COMMANDS (Admin Only)
+ * REGISTER COMMANDS
  ***********************/
 async function registerCommands() {
   const commands = [
@@ -57,11 +57,7 @@ async function registerCommands() {
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-{
-  name: 'payment-methods',
-  description: 'Toggle payment methods panel',
-  defaultMemberPermissions: PermissionFlagsBits.Administrator
-}
+
     new SlashCommandBuilder()
       .setName("close")
       .setDescription("Close ticket")
@@ -98,7 +94,6 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
       return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
 
-    // Ticket Panel
     if (interaction.commandName === "ticketpanel") {
       const embed = new EmbedBuilder()
         .setTitle("🎫 Ticket System")
@@ -126,25 +121,19 @@ client.on(Events.InteractionCreate, async interaction => {
           }
         );
 
-      const row = new ActionRowBuilder().addComponents(menu);
-      return interaction.reply({ embeds: [embed], components: [row] });
+      return interaction.reply({
+        embeds: [embed],
+        components: [new ActionRowBuilder().addComponents(menu)]
+      });
     }
 
-    // PayPal
     if (interaction.commandName === "paypal")
-      return interaction.reply(PAYPAL_INFO);
+      return interaction.reply({ content: PAYPAL_INFO, ephemeral: true });
 
-    // Binance
     if (interaction.commandName === "binance")
-      return interaction.reply(BINANCE_INFO);
+      return interaction.reply({ content: BINANCE_INFO, ephemeral: true });
 
-    // Close
     if (interaction.commandName === "close") {
-      if (!interaction.channel.name.startsWith("purchase") &&
-          !interaction.channel.name.startsWith("seller") &&
-          !interaction.channel.name.startsWith("report")) {
-        return interaction.reply({ content: "❌ This is not a ticket channel.", ephemeral: true });
-      }
       await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
       return closeTicket(interaction.channel, interaction.user);
     }
@@ -212,33 +201,34 @@ client.on(Events.InteractionCreate, async interaction => {
   /* MODALS */
   if (interaction.isModalSubmit()) {
     if (interaction.customId === "purchase_modal") {
-      await createTicket(interaction, "Purchase", [
-        `🛒 ${interaction.fields.getTextInputValue("product")}`,
-        `💳 ${interaction.fields.getTextInputValue("payment")}`
+      return createTicket(interaction, "Purchase", [
+        `🛒 **Product:** ${interaction.fields.getTextInputValue("product")}`,
+        `💳 **Payment:** ${interaction.fields.getTextInputValue("payment")}`
       ]);
     }
 
     if (interaction.customId === "seller_modal") {
-      await createTicket(interaction, "Seller", [
+      return createTicket(interaction, "Seller", [
         interaction.fields.getTextInputValue("items"),
         interaction.fields.getTextInputValue("proof")
       ]);
     }
   }
 
-  /* CLOSE BUTTON */
-  if (interaction.isButton() && interaction.customId === "close_ticket") {
-    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-      return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
+  /* BUTTONS */
+  if (interaction.isButton()) {
 
-    if (!interaction.channel.name.startsWith("purchase") &&
-        !interaction.channel.name.startsWith("seller") &&
-        !interaction.channel.name.startsWith("report")) {
-      return interaction.reply({ content: "❌ This is not a ticket channel.", ephemeral: true });
+    if (interaction.customId === "payment_methods") {
+      return interaction.reply({
+        content: `${PAYPAL_INFO}\n${BINANCE_INFO}`,
+        ephemeral: true
+      });
     }
 
-    await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
-    closeTicket(interaction.channel, interaction.user);
+    if (interaction.customId === "close_ticket") {
+      await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
+      return closeTicket(interaction.channel, interaction.user);
+    }
   }
 });
 
@@ -247,7 +237,7 @@ client.on(Events.InteractionCreate, async interaction => {
  ***********************/
 async function createTicket(interaction, type, details) {
   const channel = await interaction.guild.channels.create({
-    name: `${type}-${interaction.user.username}`.toLowerCase().replace(/ /g, "-"),
+    name: `${type}-${interaction.user.username}`.toLowerCase(),
     type: ChannelType.GuildText,
     parent: TICKET_CATEGORY_ID,
     permissionOverwrites: [
@@ -262,14 +252,25 @@ async function createTicket(interaction, type, details) {
     .setDescription(details.join("\n\n"))
     .setColor("Green");
 
-  const closeBtn = new ActionRowBuilder().addComponents(
+  const buttons = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("payment_methods")
+      .setLabel("Payment Methods")
+      .setEmoji("💳")
+      .setStyle(ButtonStyle.Secondary),
+
     new ButtonBuilder()
       .setCustomId("close_ticket")
       .setLabel("Close Ticket")
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [closeBtn] });
+  await channel.send({
+    content: `<@${interaction.user.id}>`,
+    embeds: [embed],
+    components: [buttons]
+  });
+
   await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
 }
 
@@ -297,12 +298,15 @@ async function closeTicket(channel, closer) {
 
   const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
   if (log) {
-    const embed = new EmbedBuilder()
-      .setTitle("🎫 Ticket Closed")
-      .setDescription(`Closed by ${closer.tag}`)
-      .setColor("Red");
-
-    log.send({ embeds: [embed], files: [zip] });
+    log.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("🎫 Ticket Closed")
+          .setDescription(`Closed by ${closer.tag}`)
+          .setColor("Red")
+      ],
+      files: [zip]
+    });
   }
 
   setTimeout(() => channel.delete().catch(() => {}), 3000);
@@ -312,6 +316,12 @@ async function closeTicket(channel, closer) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
+
+
+
+
+
 
 
 
