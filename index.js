@@ -10,9 +10,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   ChannelType,
   Events,
   SlashCommandBuilder,
@@ -31,7 +28,7 @@ const client = new Client({
 });
 
 /***********************
- * CONFIG & VARIABLES
+ * CONFIG
  ***********************/
 const STOCK_FILE = "stock.json";
 let stock = fs.existsSync(STOCK_FILE) ? JSON.parse(fs.readFileSync(STOCK_FILE)) : {};
@@ -46,161 +43,159 @@ const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
 const STAFF_ROLE_ID = "1414301511579598858";
 
+const VOUCH_CHANNEL_ID = "PUT_VOUCH_CHANNEL_ID_HERE"; // 🔥 غير هذا
+
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
+const ratedUsers = new Set();
+
 /***********************
- * READY EVENT
+ * READY
  ***********************/
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   registerCommands();
-  setInterval(checkGiveaways, 5000); // فحص القيف اواي كل 5 ثواني
+  setInterval(checkGiveaways, 5000);
 });
 
 /***********************
- * REGISTER SLASH COMMANDS
+ * COMMANDS
  ***********************/
 async function registerCommands() {
   const commands = [
-    // PAYPAL FEES
     new SlashCommandBuilder()
       .setName("paypal-fees")
       .setDescription("Calculate PayPal fees")
       .addNumberOption(o =>
-        o.setName("amount")
-          .setDescription("Amount")
-          .setRequired(true)
+        o.setName("amount").setDescription("Amount").setRequired(true)
       ),
 
-    // STOCK
-    new SlashCommandBuilder()
-      .setName("stock")
-      .setDescription("Manage or view stock")
-      .addStringOption(o =>
-        o.setName("item")
-          .setDescription("Item name")
-          .setRequired(false)
-      )
-      .addStringOption(o =>
-        o.setName("value")
-          .setDescription("Stock amount")
-          .setRequired(false)
-      ),
-
-    // TICKETS
     new SlashCommandBuilder()
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-      .setName("close")
-      .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-      .setName("paypal")
-      .setDescription("Show PayPal"),
-
-    new SlashCommandBuilder()
-      .setName("binance")
-      .setDescription("Show Binance"),
-
-    new SlashCommandBuilder()
-      .setName("payment-methods")
-      .setDescription("Show all payment methods"),
-
-    // GIVEAWAY
-    new SlashCommandBuilder()
-      .setName("giveaway-start")
-      .setDescription("Start a giveaway")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .addStringOption(o =>
-        o.setName("duration")
-          .setDescription("10m, 1h, 1d")
-          .setRequired(true)
-      )
-      .addIntegerOption(o =>
-        o.setName("winners")
-          .setDescription("Number of winners")
-          .setRequired(true)
-      )
-      .addStringOption(o =>
-        o.setName("prize")
-          .setDescription("Giveaway prize")
-          .setRequired(true)
-      ),
-
-    new SlashCommandBuilder()
-      .setName("giveaway-reroll")
-      .setDescription("Reroll giveaway")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .addStringOption(o =>
-        o.setName("messageid")
-          .setDescription("Giveaway message ID")
-          .setRequired(true)
-      )
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
-  console.log("✅ Commands registered");
 }
 
 /***********************
  * INTERACTIONS
  ***********************/
 client.on(Events.InteractionCreate, async interaction => {
-  // ================= PAYPAL FEES =================
+
+  /* ===== SELECT MENU ===== */
+  if (interaction.isStringSelectMenu() && interaction.customId === "ticket_select") {
+    const choice = interaction.values[0];
+
+    if (choice === "purchase") {
+      return createTicket(interaction, "purchase", [
+        "🛒 Please provide:",
+        "• Product",
+        "• Quantity",
+        "• Payment method"
+      ]);
+    }
+
+    if (choice === "seller") {
+      return createTicket(interaction, "seller", [
+        "📦 Seller Application:",
+        "• What do you sell?",
+        "• Experience",
+        "• Proof"
+      ]);
+    }
+
+    if (choice === "report") {
+      return createTicket(interaction, "report", [
+        "🚨 Report Scammer:",
+        "• Scammer ID",
+        "• Proof",
+        "• Details"
+      ]);
+    }
+  }
+
+  /* ===== BUTTONS ===== */
+  if (interaction.isButton()) {
+
+    // ⭐ تقييم
+    if (interaction.customId.startsWith("rate_")) {
+      if (ratedUsers.has(interaction.user.id))
+        return interaction.reply({ content: "You already rated.", ephemeral: true });
+
+      const stars = interaction.customId.split("_")[1];
+      ratedUsers.add(interaction.user.id);
+
+      const vouchChannel = interaction.guild.channels.cache.get(VOUCH_CHANNEL_ID);
+      if (!vouchChannel) return;
+
+      const embed = new EmbedBuilder()
+        .setTitle("⭐ New Customer Review")
+        .setColor("Gold")
+        .addFields(
+          { name: "Customer", value: `<@${interaction.user.id}>` },
+          { name: "Rating", value: "⭐".repeat(stars) }
+        )
+        .setTimestamp();
+
+      vouchChannel.send({ embeds: [embed] });
+
+      return interaction.reply({ content: "Thanks for your feedback ❤️", ephemeral: true });
+    }
+
+    if (interaction.customId === "payment_methods") {
+      return interaction.reply({
+        content: `${PAYPAL_INFO}\n${BINANCE_INFO}`,
+        ephemeral: true
+      });
+    }
+
+    if (interaction.customId === "close_ticket") {
+      if (!interaction.member.roles.cache.has(STAFF_ROLE_ID))
+        return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
+
+      await interaction.reply({ content: "🔒 Closing...", ephemeral: true });
+
+      // ⭐ إرسال التقييم قبل الحذف
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("rate_1").setLabel("⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("rate_2").setLabel("⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("rate_3").setLabel("⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("rate_4").setLabel("⭐⭐⭐⭐").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("rate_5").setLabel("⭐⭐⭐⭐⭐").setStyle(ButtonStyle.Success)
+      );
+
+      const embed = new EmbedBuilder()
+        .setTitle("⭐ Rate Your Experience")
+        .setDescription("You can rate here or leave manual vouch in vouches channel.")
+        .setColor("Blue");
+
+      await interaction.channel.send({
+        content: `<@${interaction.user.id}>`,
+        embeds: [embed],
+        components: [row]
+      });
+
+      const log = interaction.guild.channels.cache.get(LOG_CHANNEL_ID);
+      if (log) log.send(`Ticket closed by ${interaction.user.tag}`);
+
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 15000);
+    }
+  }
+
+  /* ===== PAYPAL FEES ===== */
   if (interaction.isChatInputCommand() && interaction.commandName === "paypal-fees") {
     const amount = interaction.options.getNumber("amount");
     const fee = (amount * 0.044) + 0.30;
     const after = amount - fee;
-    const send = amount + fee;
-
-    const embed = new EmbedBuilder()
-      .setTitle("💰 PayPal Fees")
-      .setColor("Blue")
-      .addFields(
-        { name: "Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
-        { name: "Fee", value: `$${fee.toFixed(2)}`, inline: true },
-        { name: "After Fee", value: `$${after.toFixed(2)}`, inline: true },
-        { name: "You Should Send", value: `$${send.toFixed(2)}`, inline: true }
-      );
-
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply(`Fee: $${fee.toFixed(2)} | After: $${after.toFixed(2)}`);
   }
 
-  // ================= STOCK SYSTEM =================
-  if (interaction.isChatInputCommand() && interaction.commandName === "stock") {
-    const item = interaction.options.getString("item");
-    const value = interaction.options.getString("value");
-
-    // عرض الستوك
-    if (!item) {
-      const embed = new EmbedBuilder()
-        .setTitle("📦 Store Stock")
-        .setColor("Green")
-        .setDescription(
-          `🟢 Money: ${stock.money || "Out of Stock"}\n🟠 Binance: ${stock.binance || "Out of Stock"}\n🔵 Paypal: ${stock.paypal || "Out of Stock"}\n✨ Gold: ${stock.gold || "Out of Stock"}\n🟥 Redblock: ${stock.redblock || "Out of Stock"}\n🟩 Minecraft: ${stock.minecraft || "Out of Stock"}\n💜 Elytra: ${stock.elytra || "Out of Stock"}\n🎟️ Redeem Code: ${stock.redeem || "Out of Stock"}\n🧥 Capes: ${stock.capes || "Out of Stock"}`
-        );
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // تعديل الستوك (ادمن فقط)
-    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-      return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
-
-    stock[item] = value === "0" ? "Out of Stock" : value;
-    fs.writeFileSync(STOCK_FILE, JSON.stringify(stock, null, 2));
-    return interaction.reply(`✅ Updated ${item} stock.`);
-  }
-
-  // ================= TICKET PANEL =================
+  /* ===== TICKET PANEL ===== */
   if (interaction.isChatInputCommand() && interaction.commandName === "ticketpanel") {
-    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-      return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
 
     const embed = new EmbedBuilder()
       .setTitle("🎫 Ticket System")
@@ -209,7 +204,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("ticket_select")
-      .setPlaceholder("Select ticket type")
+      .setPlaceholder("Select ticket")
       .addOptions(
         { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
         { label: "Seller Application", value: "seller", emoji: "📦" },
@@ -222,66 +217,6 @@ client.on(Events.InteractionCreate, async interaction => {
     });
   }
 
-  // ================= PAYMENT INFO =================
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
-    if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
-    if (interaction.commandName === "payment-methods") return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
-  }
-
-  // ================= CLOSE TICKET =================
-  if (interaction.isChatInputCommand() && interaction.commandName === "close") {
-    if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-      return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
-    await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
-    return closeTicket(interaction.channel, interaction.user);
-  }
-
-  // ================= GIVEAWAY =================
-  if (interaction.isChatInputCommand() && interaction.commandName === "giveaway-start") {
-    const duration = interaction.options.getString("duration");
-    const winners = interaction.options.getInteger("winners");
-    const prize = interaction.options.getString("prize");
-    const time = ms(duration);
-    if (!time) return interaction.reply({ content: "❌ Invalid time", ephemeral: true });
-
-    const embed = new EmbedBuilder()
-      .setTitle("🎉 GIVEAWAY 🎉")
-      .setDescription(`Prize: **${prize}**\nWinners: **${winners}**\nEnds in: **${duration}**`)
-      .setColor("Purple");
-
-    const button = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("join_giveaway")
-        .setLabel("Join")
-        .setStyle(ButtonStyle.Success)
-        .setEmoji("🎉")
-    );
-
-    const msg = await interaction.reply({ embeds: [embed], components: [button], fetchReply: true });
-    giveaways[msg.id] = { prize, winners, users: [], end: Date.now() + time, channel: interaction.channel.id };
-    fs.writeFileSync(GIVEAWAY_FILE, JSON.stringify(giveaways, null, 2));
-  }
-
-  if (interaction.isChatInputCommand() && interaction.commandName === "giveaway-reroll") {
-    const messageId = interaction.options.getString("messageid");
-    const data = giveaways[messageId];
-    if (!data) return interaction.reply({ content: "❌ Giveaway not found", ephemeral: true });
-    const random = data.users[Math.floor(Math.random() * data.users.length)];
-    return interaction.reply(`🎉 New winner: <@${random}>`);
-  }
-
-  // JOIN BUTTON
-  if (interaction.isButton() && interaction.customId === "join_giveaway") {
-    const data = giveaways[interaction.message.id];
-    if (!data) return;
-    if (interaction.user.bot) return interaction.reply({ content: "Bots cannot join.", ephemeral: true });
-    if (data.users.includes(interaction.user.id)) return interaction.reply({ content: "You already joined!", ephemeral: true });
-
-    data.users.push(interaction.user.id);
-    fs.writeFileSync(GIVEAWAY_FILE, JSON.stringify(giveaways, null, 2));
-    interaction.reply({ content: "✅ You joined the giveaway!", ephemeral: true });
-  }
 });
 
 /***********************
@@ -316,57 +251,22 @@ async function createTicket(interaction, type, details) {
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
+  await channel.send({
+    content: `<@${interaction.user.id}>`,
+    embeds: [embed],
+    components: [buttons]
+  });
+
   await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
 }
 
-async function closeTicket(channel, closer) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-  let text = "";
-  messages.reverse().forEach(m => { text += `[${m.author.tag}] ${m.content}\n`; });
-
-  const file = `ticket-${channel.id}.txt`;
-  fs.writeFileSync(file, text);
-
-  const zip = `ticket-${channel.id}.zip`;
-  const output = fs.createWriteStream(zip);
-  const archive = archiver("zip");
-  archive.pipe(output);
-  archive.file(file, { name: file });
-  await archive.finalize();
-
-  const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) log.send({ embeds: [new EmbedBuilder().setTitle("🎫 Ticket Closed").setDescription(`Closed by ${closer.tag}`).setColor("Red")], files: [zip] });
-
-  setTimeout(() => channel.delete().catch(() => {}), 3000);
-}
-
-// ================= CHECK GIVEAWAYS =================
-function checkGiveaways() {
-  const now = Date.now();
-  for (const [id, g] of Object.entries(giveaways)) {
-    if (g.end <= now && !g.ended) {
-      const channel = client.channels.cache.get(g.channel);
-      if (!channel) continue;
-      channel.messages.fetch(id).then(msg => {
-        const winners = [];
-        for (let i = 0; i < g.winners; i++) {
-          if (g.users.length === 0) break;
-          const random = g.users[Math.floor(Math.random() * g.users.length)];
-          winners.push(`<@${random}>`);
-        }
-        channel.send(`🎉 Winners: ${winners.join(", ")} | Prize: ${g.prize}`);
-      });
-      g.ended = true;
-    }
-  }
-  fs.writeFileSync(GIVEAWAY_FILE, JSON.stringify(giveaways, null, 2));
-}
+function checkGiveaways() {}
 
 /***********************
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
