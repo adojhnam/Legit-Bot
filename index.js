@@ -1,5 +1,6 @@
-require("dotenv").config();
 const fs = require("fs");
+const archiver = require("archiver");
+const ms = require("ms");
 
 const {
   Client,
@@ -28,12 +29,20 @@ const client = new Client({
 /***********************
  * CONFIG
  ***********************/
+const STOCK_FILE = "stock.json";
+let stock = fs.existsSync(STOCK_FILE) ? JSON.parse(fs.readFileSync(STOCK_FILE)) : {};
+
+const GIVEAWAY_FILE = "giveaways.json";
+let giveaways = fs.existsSync(GIVEAWAY_FILE)
+  ? JSON.parse(fs.readFileSync(GIVEAWAY_FILE))
+  : {};
+
 const TICKET_CATEGORY_ID = "1414954122918236171";
 const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
 const STAFF_ROLE_ID = "1414301511579598858";
 
-const VOUCH_CHANNEL_ID = "1414703045698256936"; // ✅ جاهز
+const VOUCH_CHANNEL_ID = "1414703045698256936"; // ✅ تم التعديل
 
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
@@ -46,6 +55,7 @@ const ratedUsers = new Set();
 client.once(Events.ClientReady, () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   registerCommands();
+  setInterval(checkGiveaways, 5000);
 });
 
 /***********************
@@ -79,50 +89,32 @@ client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isStringSelectMenu() && interaction.customId === "ticket_select") {
     const choice = interaction.values[0];
 
-    let details;
-
     if (choice === "purchase") {
-      details = [
+      return createTicket(interaction, "purchase", [
         "🛒 Please provide:",
         "• Product",
         "• Quantity",
         "• Payment method"
-      ];
+      ]);
     }
 
     if (choice === "seller") {
-      details = [
+      return createTicket(interaction, "seller", [
         "📦 Seller Application:",
         "• What do you sell?",
-        "• Prices",
+        "• Experience",
         "• Proof"
-      ];
+      ]);
     }
 
     if (choice === "report") {
-      details = [
+      return createTicket(interaction, "report", [
         "🚨 Report Scammer:",
         "• Scammer ID",
         "• Proof",
         "• Details"
-      ];
+      ]);
     }
-
-    await createTicket(interaction, choice, details);
-
-    // ⭐ إعادة القائمة حتى يقدر يفتح تذكرة ثانية
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("ticket_select")
-      .setPlaceholder("Select ticket")
-      .addOptions(
-        { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
-        { label: "Seller Application", value: "seller", emoji: "📦" },
-        { label: "Report Scammer", value: "report", emoji: "🚨" }
-      );
-
-    return interaction.message.edit({
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
   }
 
   /* ===== BUTTONS ===== */
@@ -149,7 +141,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
       vouchChannel.send({ embeds: [embed] });
 
-      return interaction.reply({ content: "Thanks ❤️", ephemeral: true });
+      return interaction.reply({ content: "Thanks for your feedback ❤️", ephemeral: true });
     }
 
     if (interaction.customId === "payment_methods") {
@@ -175,10 +167,11 @@ client.on(Events.InteractionCreate, async interaction => {
 
       const embed = new EmbedBuilder()
         .setTitle("⭐ Rate Your Experience")
-        .setDescription("Or leave manual vouch in vouches channel.")
+        .setDescription("You can rate here or leave manual vouch in vouches channel.")
         .setColor("Blue");
 
       await interaction.channel.send({
+        content: `<@${interaction.user.id}>`,
         embeds: [embed],
         components: [row]
       });
@@ -190,17 +183,13 @@ client.on(Events.InteractionCreate, async interaction => {
     }
   }
 
-  /* ===== PAYPAL ===== */
   if (interaction.isChatInputCommand() && interaction.commandName === "paypal-fees") {
     const amount = interaction.options.getNumber("amount");
-
-    const fee = (amount * 0.044) + 0.6; // ✅ التعديل
+    const fee = (amount * 0.044) + 0.30;
     const after = amount - fee;
-
     return interaction.reply(`Fee: $${fee.toFixed(2)} | After: $${after.toFixed(2)}`);
   }
 
-  /* ===== PANEL ===== */
   if (interaction.isChatInputCommand() && interaction.commandName === "ticketpanel") {
 
     const embed = new EmbedBuilder()
@@ -266,11 +255,12 @@ async function createTicket(interaction, type, details) {
   await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
 }
 
+function checkGiveaways() {}
+
 /***********************
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
-
 
 
 
