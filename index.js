@@ -219,9 +219,12 @@ client.on(Events.InteractionCreate, async interaction => {
       const winnersCount = interaction.options.getInteger("winners");
       const prize = interaction.options.getString("prize");
 
+      const totalTime = ms(duration);
+      const endTime = Date.now() + totalTime;
+
       const giveawayEmbed = new EmbedBuilder()
         .setTitle(`🎁 Giveaway`)
-        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Duration:** ${duration}\n**React with 🎉 to enter!**`)
+        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Time Left:** ${duration}`)
         .setColor("Blue")
         .addFields({ name: "Participants", value: "0", inline: true });
 
@@ -233,9 +236,28 @@ client.on(Events.InteractionCreate, async interaction => {
       );
 
       const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [joinButton], fetchReply: true });
-      giveaways.set(msg.id, { participants: new Set(), winnersCount, prize, message: msg });
+      const participants = new Set();
+      giveaways.set(msg.id, { participants, winnersCount, prize, message: msg, endTime });
 
-      setTimeout(() => endGiveaway(msg.id), ms(duration));
+      // تحديث الوقت كل ثانية
+      const interval = setInterval(async () => {
+        const g = giveaways.get(msg.id);
+        if (!g) return clearInterval(interval);
+
+        const remaining = g.endTime - Date.now();
+        if (remaining <= 0) {
+          clearInterval(interval);
+          return endGiveaway(msg.id);
+        }
+
+        const remainingMS = ms(remaining, { long: true });
+        const embed = EmbedBuilder.from(msg.embeds[0])
+          .setDescription(`**Prize:** ${g.prize}\n**Winners:** ${g.winnersCount}\n**Time Left:** ${remainingMS}`)
+          .spliceFields(0, 1)
+          .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
+
+        await g.message.edit({ embeds: [embed] });
+      }, 1000);
     }
 
     // Giveaway End
@@ -292,10 +314,6 @@ client.on(Events.InteractionCreate, async interaction => {
       for (const [msgId, g] of giveaways.entries()) {
         if (g.message.id === interaction.message.id) {
           g.participants.add(interaction.user.id);
-          const embed = EmbedBuilder.from(g.message.embeds[0])
-            .spliceFields(0, 1)
-            .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
-          await g.message.edit({ embeds: [embed] });
           return interaction.reply({ content: "✅ You entered the giveaway!", ephemeral: true });
         }
       }
@@ -454,4 +472,5 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
