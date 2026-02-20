@@ -18,8 +18,7 @@ const {
   SlashCommandBuilder,
   REST,
   Routes,
-  PermissionFlagsBits,
-  StringSelectMenuBuilder
+  PermissionFlagsBits
 } = require("discord.js");
 
 const client = new Client({
@@ -137,20 +136,6 @@ async function registerCommands() {
 }
 
 /***********************
- * Helper: Ticket Menu
- ***********************/
-function createTicketMenu() {
-  return new StringSelectMenuBuilder()
-    .setCustomId("ticket_select")
-    .setPlaceholder("Select ticket type")
-    .addOptions(
-      { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
-      { label: "Seller Application", value: "seller", emoji: "📦" },
-      { label: "Report Scammer", value: "report", emoji: "🚨" }
-    );
-}
-
-/***********************
  * INTERACTIONS
  ***********************/
 client.on(Events.InteractionCreate, async interaction => {
@@ -160,7 +145,7 @@ client.on(Events.InteractionCreate, async interaction => {
   // --------------------
   if (interaction.isChatInputCommand()) {
 
-    // ===== PayPal Fees =====
+    // PayPal Fees
     if (interaction.commandName === "paypal-fees") {
       const amount = interaction.options.getNumber("amount");
       const fee = (amount * 0.0449) + 0.6;
@@ -181,7 +166,7 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.reply({ embeds: [embed] });
     }
 
-    // ===== Ticket Panel =====
+    // Ticket Panel
     if (interaction.commandName === "ticketpanel") {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
         return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
@@ -191,18 +176,33 @@ client.on(Events.InteractionCreate, async interaction => {
         .setDescription("Choose ticket type")
         .setColor("Blue");
 
-      await interaction.reply({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(createTicketMenu())]
-      });
+      const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("ticket_purchase")
+          .setLabel("Purchase")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("🛒"),
+        new ButtonBuilder()
+          .setCustomId("ticket_seller")
+          .setLabel("Seller Application")
+          .setStyle(ButtonStyle.Success)
+          .setEmoji("📦"),
+        new ButtonBuilder()
+          .setCustomId("ticket_report")
+          .setLabel("Report Scammer")
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji("🚨")
+      );
+
+      await interaction.reply({ embeds: [embed], components: [buttons] });
     }
 
-    // ===== Payment Commands =====
+    // Payment Commands
     if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
     if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
     if (interaction.commandName === "payment-methods") return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
 
-    // ===== Close Ticket =====
+    // Close Ticket
     if (interaction.commandName === "close") {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
         return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
@@ -210,7 +210,7 @@ client.on(Events.InteractionCreate, async interaction => {
       return closeTicket(interaction.channel, interaction.user);
     }
 
-    // ===== Giveaway Start =====
+    // Giveaway Start
     if (interaction.commandName === "giveaway") {
       if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID))
         return interaction.reply({ content: "❌ Admins only.", ephemeral: true });
@@ -238,13 +238,13 @@ client.on(Events.InteractionCreate, async interaction => {
       setTimeout(() => endGiveaway(msg.id), ms(duration));
     }
 
-    // ===== Giveaway End =====
+    // Giveaway End
     if (interaction.commandName === "giveaway_end") {
       const messageId = interaction.options.getString("message_id");
       return endGiveaway(messageId, interaction);
     }
 
-    // ===== Giveaway Reroll =====
+    // Giveaway Reroll
     if (interaction.commandName === "giveaway_reroll") {
       const messageId = interaction.options.getString("message_id");
       return rerollGiveaway(messageId, interaction);
@@ -252,12 +252,12 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   // --------------------
-  // SELECT MENU (Ticket)
+  // BUTTONS
   // --------------------
-  if (interaction.isStringSelectMenu() && interaction.customId === "ticket_select") {
-    const choice = interaction.values[0];
+  if (interaction.isButton()) {
 
-    if (choice === "purchase") {
+    // Ticket Buttons
+    if (interaction.customId === "ticket_purchase") {
       const modal = new ModalBuilder().setCustomId("purchase_modal").setTitle("Purchase");
       modal.addComponents(
         new ActionRowBuilder().addComponents(
@@ -267,10 +267,10 @@ client.on(Events.InteractionCreate, async interaction => {
           new TextInputBuilder().setCustomId("payment").setLabel("Payment method").setStyle(TextInputStyle.Short).setRequired(true)
         )
       );
-      await interaction.showModal(modal);
+      return interaction.showModal(modal);
     }
 
-    else if (choice === "seller") {
+    if (interaction.customId === "ticket_seller") {
       const modal = new ModalBuilder().setCustomId("seller_modal").setTitle("Seller Application");
       modal.addComponents(
         new ActionRowBuilder().addComponents(
@@ -280,40 +280,12 @@ client.on(Events.InteractionCreate, async interaction => {
           new TextInputBuilder().setCustomId("proof").setLabel("Why should we trust you?").setStyle(TextInputStyle.Paragraph).setRequired(true)
         )
       );
-      await interaction.showModal(modal);
+      return interaction.showModal(modal);
     }
 
-    else if (choice === "report") {
-      await createTicket(interaction, "Report", ["🚨 Scam report"]);
+    if (interaction.customId === "ticket_report") {
+      return createTicket(interaction, "Report", ["🚨 Scam report"]);
     }
-
-    // إعادة إرسال القائمة بدون تذكر الاختيار السابق
-    await interaction.update({ components: [new ActionRowBuilder().addComponents(createTicketMenu())] });
-  }
-
-  // --------------------
-  // MODAL SUBMITS
-  // --------------------
-  if (interaction.isModalSubmit()) {
-    if (interaction.customId === "purchase_modal") {
-      return createTicket(interaction, "Purchase", [
-        `🛒 **Product:** ${interaction.fields.getTextInputValue("product")}`,
-        `💳 **Payment:** ${interaction.fields.getTextInputValue("payment")}`
-      ]);
-    }
-
-    if (interaction.customId === "seller_modal") {
-      return createTicket(interaction, "Seller", [
-        interaction.fields.getTextInputValue("items"),
-        interaction.fields.getTextInputValue("proof")
-      ]);
-    }
-  }
-
-  // --------------------
-  // BUTTONS
-  // --------------------
-  if (interaction.isButton()) {
 
     // Giveaway Join
     if (interaction.customId === "giveaway_join") {
@@ -336,6 +308,25 @@ client.on(Events.InteractionCreate, async interaction => {
     if (interaction.customId === "close_ticket") {
       await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
       return closeTicket(interaction.channel, interaction.user);
+    }
+  }
+
+  // --------------------
+  // Modal Submit
+  // --------------------
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === "purchase_modal") {
+      return createTicket(interaction, "Purchase", [
+        `🛒 **Product:** ${interaction.fields.getTextInputValue("product")}`,
+        `💳 **Payment:** ${interaction.fields.getTextInputValue("payment")}`
+      ]);
+    }
+
+    if (interaction.customId === "seller_modal") {
+      return createTicket(interaction, "Seller", [
+        interaction.fields.getTextInputValue("items"),
+        interaction.fields.getTextInputValue("proof")
+      ]);
     }
   }
 });
@@ -463,3 +454,4 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
