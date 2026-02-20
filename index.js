@@ -206,27 +206,53 @@ client.on(Events.InteractionCreate, async interaction => {
       return rerollGiveaway(messageId, interaction);
     }
 
-    // ===== Ticket Panel / Payments / Close Ticket =====
-    if (interaction.commandName === "ticketpanel") {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-        return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
+   // ===== Ticket Panel / Payments / Close Ticket =====
+if (interaction.commandName === "ticketpanel") {
+  if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
+    return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Ticket System")
-        .setDescription("Choose ticket type")
-        .setColor("Blue");
+  const embed = new EmbedBuilder()
+    .setTitle("🎫 Ticket System")
+    .setDescription("Choose ticket type")
+    .setColor("Blue");
 
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId("ticket_select")
-        .setPlaceholder("Select ticket type")
-        .addOptions(
-          { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
-          { label: "Seller Application", value: "seller", emoji: "📦" },
-          { label: "Report Scammer", value: "report", emoji: "🚨" }
-        );
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId("ticket_select")
+    .setPlaceholder("Select ticket type")
+    .addOptions(
+      { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
+      { label: "Seller Application", value: "seller", emoji: "📦" },
+      { label: "Report Scammer", value: "report", emoji: "🚨" }
+    );
 
-      return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
-    }
+  // إرسال القائمة
+  await interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+}
+
+// ===== Handle Select Menu =====
+client.on("interactionCreate", async (selectInteraction) => {
+  if (!selectInteraction.isStringSelectMenu()) return;
+
+  if (selectInteraction.customId === "ticket_select") {
+    const choice = selectInteraction.values[0];
+
+    // هنا تعامل مع الاختيار (فتح تذكرة أو أي وظيفة)
+    // مثال:
+    await selectInteraction.followUp({ content: `You selected: ${choice}`, ephemeral: true });
+
+    // إعادة إرسال نفس الـ menu بدون أن يظل متذكر الاختيار السابق
+    const resetMenu = new StringSelectMenuBuilder()
+      .setCustomId("ticket_select")
+      .setPlaceholder("Select ticket type")
+      .addOptions(
+        { label: "Purchase", value: "purchase", emoji: { id: "1438808044346675290" } },
+        { label: "Seller Application", value: "seller", emoji: "📦" },
+        { label: "Report Scammer", value: "report", emoji: "🚨" }
+      );
+
+    await selectInteraction.update({ components: [new ActionRowBuilder().addComponents(resetMenu)] });
+  }
+});
 
     if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
     if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
@@ -314,5 +340,6 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
