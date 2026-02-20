@@ -57,7 +57,14 @@ async function registerCommands() {
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
+new SlashCommandBuilder()
+  .setName("paypal-fees")
+  .setDescription("Calculate PayPal fees")
+  .addNumberOption(o =>
+    o.setName("amount")
+      .setDescription("Amount")
+      .setRequired(true)
+  ),
     new SlashCommandBuilder()
       .setName("close")
       .setDescription("Close ticket")
@@ -92,7 +99,43 @@ client.on(Events.InteractionCreate, async interaction => {
 
   /* SLASH COMMANDS */
   if (interaction.isChatInputCommand()) {
+// PayPal Fees
+if (interaction.commandName === "paypal-fees") {
+  const amount = interaction.options.getNumber("amount");
 
+  const fee = (amount * 0.0449) + 0.6;
+  const after = amount - fee;
+  const send = amount + fee;
+
+  const embed = new EmbedBuilder()
+    .setColor("#009cde")
+    .setTitle("PayPal Fee Calculator")
+    .addFields(
+      {
+        name: "<:paypal:1430875512221339680> Original Amount",
+        value: `$${amount.toFixed(2)}`,
+        inline: true
+      },
+      {
+        name: "📊 Fee",
+        value: `$${fee.toFixed(2)}`,
+        inline: true
+      },
+      {
+        name: "📉 After Fee",
+        value: `$${after.toFixed(2)}`,
+        inline: true
+      },
+      {
+        name: "📤 You Send",
+        value: `$${send.toFixed(2)}`,
+        inline: true
+      }
+    )
+    .setFooter({ text: "PayPal Calculator" });
+
+  return interaction.reply({ embeds: [embed] });
+}
     // Ticket Panel
     if (interaction.commandName === "ticketpanel") {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
@@ -324,6 +367,7 @@ async function closeTicket(channel, closer) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
