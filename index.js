@@ -2,7 +2,6 @@ require("dotenv").config();
 const fs = require("fs");
 const archiver = require("archiver");
 const ms = require("ms");
-
 const {
   Client,
   GatewayIntentBits,
@@ -37,12 +36,12 @@ const TICKET_CATEGORY_ID = "1414954122918236171";
 const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
 const STAFF_ROLE_ID = "1414301511579598858";
+const ADMIN_ROLE_ID = "1414301511579598858"; // نفس الادمن
 
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
-// Giveaway Map
-let giveaways = new Map();
+let giveaways = new Map(); // لتخزين كل القيف أوايات مؤقتاً
 
 /***********************
  * READY
@@ -63,18 +62,18 @@ async function registerCommands() {
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
-      .setName("close")
-      .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
       .setName("paypal-fees")
       .setDescription("Calculate PayPal fees")
       .addNumberOption(o =>
         o.setName("amount")
-          .setDescription("Amount")
-          .setRequired(true)
+         .setDescription("Amount")
+         .setRequired(true)
       ),
+
+    new SlashCommandBuilder()
+      .setName("close")
+      .setDescription("Close ticket")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
       .setName("paypal")
@@ -88,29 +87,51 @@ async function registerCommands() {
       .setName("payment-methods")
       .setDescription("Show all payment methods"),
 
+    // ===== Giveaway Commands =====
     new SlashCommandBuilder()
       .setName("giveaway")
       .setDescription("Start a giveaway")
-      .addStringOption(opt =>
+      .addStringOption(opt => 
         opt.setName("duration")
-          .setDescription("Duration e.g. 1h, 30m, 2d")
-          .setRequired(true)
+           .setDescription("Duration e.g. 1h, 30m, 2d")
+           .setRequired(true)
       )
-      .addIntegerOption(opt =>
+      .addIntegerOption(opt => 
         opt.setName("winners")
-          .setDescription("Number of winners")
-          .setRequired(true)
+           .setDescription("Number of winners")
+           .setRequired(true)
       )
-      .addStringOption(opt =>
+      .addStringOption(opt => 
         opt.setName("prize")
-          .setDescription("Prize description")
-          .setRequired(true)
+           .setDescription("Prize description")
+           .setRequired(true)
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("giveaway_end")
+      .setDescription("End a giveaway early")
+      .addStringOption(opt => 
+        opt.setName("message_id")
+           .setDescription("ID of the giveaway message")
+           .setRequired(true)
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("giveaway_reroll")
+      .setDescription("Reroll winners of a giveaway")
+      .addStringOption(opt => 
+        opt.setName("message_id")
+           .setDescription("ID of the giveaway message")
+           .setRequired(true)
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+
   console.log("✅ Commands registered");
 }
 
@@ -119,12 +140,10 @@ async function registerCommands() {
  ***********************/
 client.on(Events.InteractionCreate, async interaction => {
 
-  // --------------------
-  // SLASH COMMANDS
-  // --------------------
+  // ===== SLASH COMMANDS =====
   if (interaction.isChatInputCommand()) {
 
-    // PayPal Fees
+    // ===== PayPal Fees =====
     if (interaction.commandName === "paypal-fees") {
       const amount = interaction.options.getNumber("amount");
       const fee = (amount * 0.0449) + 0.6;
@@ -145,7 +164,49 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.reply({ embeds: [embed] });
     }
 
-    // Ticket Panel
+    // ===== Giveaway Start =====
+    if (interaction.commandName === "giveaway") {
+      if (!interaction.member.roles.cache.has(ADMIN_ROLE_ID))
+        return interaction.reply({ content: "❌ Admins only.", ephemeral: true });
+
+      const duration = interaction.options.getString("duration");
+      const winnersCount = interaction.options.getInteger("winners");
+      const prize = interaction.options.getString("prize");
+
+      const giveawayEmbed = new EmbedBuilder()
+        .setTitle(`🎁 Giveaway`)
+        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Duration:** ${duration}\n**React with 🎉 to enter!**`)
+        .setColor("Blue")
+        .addFields({ name: "Participants", value: "0", inline: true });
+
+      const joinButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("giveaway_join")
+          .setLabel("🎉 Enter")
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [joinButton], fetchReply: true });
+      const participants = new Set();
+      giveaways.set(msg.id, { participants, winnersCount, prize, message: msg });
+
+      // مؤقت انتهاء القيف أواي
+      setTimeout(() => endGiveaway(msg.id), ms(duration));
+    }
+
+    // ===== Giveaway End =====
+    if (interaction.commandName === "giveaway_end") {
+      const messageId = interaction.options.getString("message_id");
+      return endGiveaway(messageId, interaction);
+    }
+
+    // ===== Giveaway Reroll =====
+    if (interaction.commandName === "giveaway_reroll") {
+      const messageId = interaction.options.getString("message_id");
+      return rerollGiveaway(messageId, interaction);
+    }
+
+    // ===== Ticket Panel / Payments / Close Ticket =====
     if (interaction.commandName === "ticketpanel") {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
         return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
@@ -167,216 +228,93 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
     }
 
-    // Payment Commands
     if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
     if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
     if (interaction.commandName === "payment-methods") return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
-
-    // Close Ticket
     if (interaction.commandName === "close") {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
         return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
       await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
       return closeTicket(interaction.channel, interaction.user);
     }
-
-    // Giveaway Start
-    if (interaction.commandName === "giveaway") {
-      if (!interaction.member.roles.cache.has(STAFF_ROLE_ID))
-        return interaction.reply({ content: "❌ Admins only.", ephemeral: true });
-
-      const duration = interaction.options.getString("duration");
-      const winnersCount = interaction.options.getInteger("winners");
-      const prize = interaction.options.getString("prize");
-
-      const giveawayEmbed = new EmbedBuilder()
-        .setTitle("🎁 Giveaway")
-        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Duration:** ${duration}\n**React with 🎉 to enter!**`)
-        .setColor("Blue")
-        .addFields({ name: "Participants", value: "0", inline: true });
-
-      const joinButton = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("giveaway_join").setLabel("🎉 Enter").setStyle(ButtonStyle.Primary)
-      );
-
-      const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [joinButton], fetchReply: true });
-      giveaways.set(msg.id, { participants: new Set(), winnersCount, prize, message: msg });
-
-      setTimeout(async () => {
-        const g = giveaways.get(msg.id);
-        giveaways.delete(msg.id);
-
-        if (g.participants.size === 0) {
-          const noEntryEmbed = EmbedBuilder.from(g.message.embeds[0])
-            .setDescription(`**Prize:** ${g.prize}\n**No valid entries.**`)
-            .setColor("Red");
-          return g.message.edit({ embeds: [noEntryEmbed], components: [] });
-        }
-
-        const entries = Array.from(g.participants);
-        const winners = [];
-        while (winners.length < Math.min(g.winnersCount, entries.length)) {
-          const rand = entries[Math.floor(Math.random() * entries.length)];
-          if (!winners.includes(rand)) winners.push(rand);
-        }
-
-        const winnerMentions = winners.map(id => `<@${id}>`).join(", ");
-        const finishedEmbed = EmbedBuilder.from(g.message.embeds[0])
-          .setDescription(`**Prize:** ${g.prize}\n**Winners:** ${winnerMentions}`)
-          .setColor("Green")
-          .addFields({ name: "Total Participants", value: `${g.participants.size}`, inline: true });
-
-        await g.message.edit({ embeds: [finishedEmbed], components: [] });
-      }, ms(duration));
-    }
   }
 
-  // --------------------
-  // SELECT MENU
-  // --------------------
-  if (interaction.isStringSelectMenu()) {
-    const choice = interaction.values[0];
-
-    if (choice === "purchase") {
-      const modal = new ModalBuilder().setCustomId("purchase_modal").setTitle("Purchase");
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("product").setLabel("Product").setStyle(TextInputStyle.Short).setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("payment").setLabel("Payment method").setStyle(TextInputStyle.Short).setRequired(true)
-        )
-      );
-      return interaction.showModal(modal);
-    }
-
-    if (choice === "seller") {
-      const modal = new ModalBuilder().setCustomId("seller_modal").setTitle("Seller Application");
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("items").setLabel("Items & prices").setStyle(TextInputStyle.Paragraph).setRequired(true)
-        ),
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder().setCustomId("proof").setLabel("Why should we trust you?").setStyle(TextInputStyle.Paragraph).setRequired(true)
-        )
-      );
-      return interaction.showModal(modal);
-    }
-
-    if (choice === "report") return createTicket(interaction, "Report", ["🚨 Scam report"]);
-  }
-
-  // --------------------
-  // MODALS
-  // --------------------
-  if (interaction.isModalSubmit()) {
-    if (interaction.customId === "purchase_modal") {
-      return createTicket(interaction, "Purchase", [
-        `🛒 **Product:** ${interaction.fields.getTextInputValue("product")}`,
-        `💳 **Payment:** ${interaction.fields.getTextInputValue("payment")}`
-      ]);
-    }
-
-    if (interaction.customId === "seller_modal") {
-      return createTicket(interaction, "Seller", [
-        interaction.fields.getTextInputValue("items"),
-        interaction.fields.getTextInputValue("proof")
-      ]);
-    }
-  }
-
-  // --------------------
-  // BUTTONS
-  // --------------------
-  if (interaction.isButton()) {
-    if (interaction.customId === "payment_methods") return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
-    if (interaction.customId === "close_ticket") {
-      await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
-      return closeTicket(interaction.channel, interaction.user);
-    }
-    if (interaction.customId === "giveaway_join") {
-      for (const [msgId, g] of giveaways.entries()) {
-        if (g.message.id === interaction.message.id) {
-          g.participants.add(interaction.user.id);
-          const embed = EmbedBuilder.from(g.message.embeds[0])
-            .spliceFields(0, 1)
-            .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
-          await g.message.edit({ embeds: [embed] });
-          return interaction.reply({ content: "✅ You entered the giveaway!", ephemeral: true });
-        }
+  // ===== Giveaway Join Button =====
+  if (interaction.isButton() && interaction.customId === "giveaway_join") {
+    for (const [msgId, g] of giveaways.entries()) {
+      if (g.message.id === interaction.message.id) {
+        g.participants.add(interaction.user.id);
+        const embed = EmbedBuilder.from(g.message.embeds[0])
+          .spliceFields(0, 1)
+          .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
+        await g.message.edit({ embeds: [embed] });
+        return interaction.reply({ content: "✅ You entered the giveaway!", ephemeral: true });
       }
     }
   }
 });
 
 /***********************
- * CREATE TICKET
+ * GIVEAWAY FUNCTIONS
  ***********************/
-async function createTicket(interaction, type, details) {
-  const channel = await interaction.guild.channels.create({
-    name: `${type}-${interaction.user.username}`.toLowerCase(),
-    type: ChannelType.GuildText,
-    parent: TICKET_CATEGORY_ID,
-    permissionOverwrites: [
-      { id: interaction.guild.roles.everyone.id, deny: ["ViewChannel"] },
-      { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] },
-      { id: STAFF_ROLE_ID, allow: ["ViewChannel", "SendMessages"] }
-    ]
-  });
+async function endGiveaway(msgId, interaction) {
+  const g = giveaways.get(msgId);
+  if (!g) return interaction?.reply?.({ content: "❌ Giveaway not found.", ephemeral: true });
 
-  const embed = new EmbedBuilder()
-    .setTitle(`🎫 ${type}`)
-    .setDescription(details.join("\n\n"))
-    .setColor("Green");
+  giveaways.delete(msgId);
 
-  const buttons = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("payment_methods").setLabel("Payment Methods").setEmoji("💳").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("close_ticket").setLabel("Close Ticket").setStyle(ButtonStyle.Danger)
-  );
-
-  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
-  await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
-}
-
-/***********************
- * CLOSE + LOG
- ***********************/
-async function closeTicket(channel, closer) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-  let text = "";
-
-  messages.reverse().forEach(m => { text += `[${m.author.tag}] ${m.content}\n`; });
-
-  const file = `ticket-${channel.id}.txt`;
-  fs.writeFileSync(file, text);
-
-  const zip = `ticket-${channel.id}.zip`;
-  const output = fs.createWriteStream(zip);
-  const archive = archiver("zip");
-  archive.pipe(output);
-  archive.file(file, { name: file });
-  await archive.finalize();
-
-  const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) {
-    log.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("🎫 Ticket Closed")
-          .setDescription(`Closed by ${closer.tag}`)
-          .setColor("Red")
-      ],
-      files: [zip]
-    });
+  if (g.participants.size === 0) {
+    const noEntryEmbed = EmbedBuilder.from(g.message.embeds[0])
+      .setDescription(`**Prize:** ${g.prize}\n**No valid entries.**`)
+      .setColor("Red");
+    await g.message.edit({ embeds: [noEntryEmbed], components: [] });
+    return interaction?.reply?.({ content: "✅ Giveaway ended.", ephemeral: true });
   }
 
-  setTimeout(() => channel.delete().catch(() => {}), 3000);
+  const entries = Array.from(g.participants);
+  const winners = [];
+  while (winners.length < Math.min(g.winnersCount, entries.length)) {
+    const rand = entries[Math.floor(Math.random() * entries.length)];
+    if (!winners.includes(rand)) winners.push(rand);
+  }
+
+  const winnerMentions = winners.map(id => `<@${id}>`).join(", ");
+  const finishedEmbed = EmbedBuilder.from(g.message.embeds[0])
+    .setDescription(`**Prize:** ${g.prize}\n**Winners:** ${winnerMentions}`)
+    .setColor("Green")
+    .addFields({ name: "Total Participants", value: `${g.participants.size}`, inline: true });
+
+  await g.message.edit({ embeds: [finishedEmbed], components: [] });
+  return interaction?.reply?.({ content: "✅ Giveaway ended.", ephemeral: true });
+}
+
+async function rerollGiveaway(msgId, interaction) {
+  const g = giveaways.get(msgId);
+  if (!g) return interaction?.reply?.({ content: "❌ Giveaway not found.", ephemeral: true });
+
+  if (g.participants.size === 0) return interaction.reply({ content: "❌ No participants to reroll.", ephemeral: true });
+
+  const entries = Array.from(g.participants);
+  const winners = [];
+  while (winners.length < Math.min(g.winnersCount, entries.length)) {
+    const rand = entries[Math.floor(Math.random() * entries.length)];
+    if (!winners.includes(rand)) winners.push(rand);
+  }
+
+  const winnerMentions = winners.map(id => `<@${id}>`).join(", ");
+  const rerollEmbed = EmbedBuilder.from(g.message.embeds[0])
+    .setDescription(`**Prize:** ${g.prize}\n**Winners (Reroll):** ${winnerMentions}`)
+    .setColor("Yellow");
+
+  await g.message.edit({ embeds: [rerollEmbed] });
+  return interaction.reply({ content: "✅ Giveaway rerolled.", ephemeral: true });
 }
 
 /***********************
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
