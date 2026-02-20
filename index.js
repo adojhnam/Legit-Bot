@@ -123,60 +123,54 @@ client.on(Events.InteractionCreate, async interaction => {
 
   const sub = interaction.options.getSubcommand();
 
-  // Reset
+  if (sub === "user") {
+    const user = interaction.options.getUser("target");
+    const data = inviteData[user.id] || { real: 0, fake: 0, rejoin: 0 };
+
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Invites for ${user.username}`)
+      .addFields(
+        { name: "✅ Real", value: `${data.real}`, inline: true },
+        { name: "🤖 Fake", value: `${data.fake}`, inline: true },
+        { name: "🔁 Rejoin", value: `${data.rejoin}`, inline: true },
+        { name: "📦 Total", value: `${data.real + data.fake + data.rejoin}` }
+      )
+      .setColor("Blue");
+
+    return interaction.reply({ embeds: [embed] });
+  }
+
   if (sub === "reset") {
     inviteData = {};
     saveInvites();
     return interaction.reply("✅ Invite counter reset.");
   }
 
-  // User stats
-  if (sub === "user") {
-    const user = interaction.options.getUser("target");
-    const d = inviteData[user.id] || { real: 0, fake: 0, rejoin: 0 };
-
-    return interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`📊 ${user.username}`)
-          .setColor("Blue")
-          .addFields(
-            { name: "✅ Real", value: `${d.real}`, inline: true },
-            { name: "🤖 Fake", value: `${d.fake}`, inline: true },
-            { name: "🔁 Rejoin", value: `${d.rejoin}`, inline: true }
-          )
-      ]
-    });
-  }
-
-  // Leaderboard
   if (sub === "leaderboard") {
     const sorted = Object.entries(inviteData)
       .sort((a, b) => b[1].real - a[1].real);
 
-    if (!sorted.length)
-      return interaction.reply("❌ No invite data yet.");
+    if (!sorted.length) return interaction.reply("❌ No invites yet.");
 
     let page = 0;
-    const max = Math.ceil(sorted.length / 10);
 
-    const build = () => {
-      const slice = sorted.slice(page * 10, page * 10 + 10);
+    function getPage(p) {
+      const slice = sorted.slice(p * 10, p * 10 + 10);
       let desc = "";
-
-      slice.forEach(([id, d], i) => {
-        const rank = page * 10 + i + 1;
-        const medals = ["🥇", "🥈", "🥉"];
-        const medal = medals[rank - 1] || "";
-        desc += `${medal} <@${id}> — **${d.real}**\n`;
+      slice.forEach(([id, data], i) => {
+        const rank = p * 10 + i + 1;
+        let medal = "";
+        if (rank === 1) medal = "🥇";
+        if (rank === 2) medal = "🥈";
+        if (rank === 3) medal = "🥉";
+        desc += `${medal} <@${id}> — **${data.real}**\n`;
       });
-
       return new EmbedBuilder()
         .setTitle("🏆 Invite Leaderboard")
-        .setColor("Gold")
         .setDescription(desc)
-        .setFooter({ text: `Page ${page + 1}/${max}` });
-    };
+        .setColor("Gold")
+        .setFooter({ text: `Page ${p + 1}/${Math.ceil(sorted.length / 10)}` });
+    }
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -190,21 +184,20 @@ client.on(Events.InteractionCreate, async interaction => {
     );
 
     const msg = await interaction.reply({
-      embeds: [build()],
+      embeds: [getPage(page)],
       components: [row],
       fetchReply: true
     });
 
     const collector = msg.createMessageComponentCollector({ time: 600000 });
-
     collector.on("collect", i => {
       if (i.user.id !== interaction.user.id)
         return i.reply({ content: "❌ Not yours.", ephemeral: true });
 
       if (i.customId === "prev_inv" && page > 0) page--;
-      if (i.customId === "next_inv" && page < max - 1) page++;
+      if (i.customId === "next_inv" && page < Math.ceil(sorted.length / 10) - 1) page++;
 
-      i.update({ embeds: [build()] });
+      i.update({ embeds: [getPage(page)] });
     });
   }
 });
@@ -636,4 +629,5 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
