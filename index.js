@@ -224,7 +224,67 @@ client.on(Events.InteractionCreate, async interaction => {
           { label: "Seller Application", value: "seller", emoji: "📦" },
           { label: "Report Scammer", value: "report", emoji: "🚨" }
         );
+/* ===== SELECT MENU ===== */
+if (interaction.isStringSelectMenu()) {
+  const choice = interaction.values[0];
 
+  // إعادة ضبط Select Menu فوراً عشان المستخدم يقدر يختار نفس الخيار مرة ثانية
+  await interaction.update({ components: [] });
+
+  if (choice === "purchase") {
+    const modal = new ModalBuilder()
+      .setCustomId("purchase_modal")
+      .setTitle("Purchase");
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("product")
+          .setLabel("Product")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("payment")
+          .setLabel("Payment method")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      )
+    );
+
+    return interaction.showModal(modal);
+  }
+
+  if (choice === "seller") {
+    const modal = new ModalBuilder()
+      .setCustomId("seller_modal")
+      .setTitle("Seller Application");
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("items")
+          .setLabel("Items & prices")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("proof")
+          .setLabel("Why should we trust you?")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      )
+    );
+
+    return interaction.showModal(modal);
+  }
+
+  if (choice === "report") {
+    return createTicket(interaction, "Report", ["🚨 Scam report"]);
+  }
+}
       return interaction.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
     }
 
@@ -314,3 +374,4 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
