@@ -40,7 +40,174 @@ const ADMIN_ROLE_ID = "1414301511579598858"; // نفس الادمن
 
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
+/***********************
+ * INVITE SYSTEM
+ ***********************/
+let invitesCache = new Map();
 
+let inviteData = fs.existsSync("./invites.json")
+  ? JSON.parse(fs.readFileSync("./invites.json"))
+  : {};
+
+const saveInvites = () =>
+  fs.writeFileSync("./invites.json", JSON.stringify(inviteData, null, 2));
+
+/***********************
+ * READY - CACHE INVITES
+ ***********************/
+client.once(Events.ClientReady, async () => {
+  const guild = client.guilds.cache.get(GUILD_ID);
+  if (!guild) return;
+
+  const invites = await guild.invites.fetch();
+  invitesCache.set(guild.id, new Map(invites.map(i => [i.code, i.uses])));
+});
+
+/***********************
+ * TRACK JOIN
+ ***********************/
+client.on("guildMemberAdd", async member => {
+  const guild = member.guild;
+
+  const newInvites = await guild.invites.fetch();
+  const oldInvites = invitesCache.get(guild.id);
+  if (!oldInvites) return;
+
+  let usedInvite;
+
+  newInvites.forEach(inv => {
+    if ((oldInvites.get(inv.code) || 0) < inv.uses) {
+      usedInvite = inv;
+    }
+  });
+
+  invitesCache.set(guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
+  if (!usedInvite) return;
+
+  const inviter = usedInvite.inviter.id;
+
+  if (!inviteData[inviter])
+    inviteData[inviter] = { real: 0, fake: 0, rejoin: 0, users: [] };
+
+  const accountAge = Date.now() - member.user.createdTimestamp;
+  const week = 7 * 86400000;
+
+  if (inviteData[inviter].users.includes(member.id)) {
+    inviteData[inviter].rejoin++;
+  } else {
+    if (accountAge < week) inviteData[inviter].fake++;
+    else inviteData[inviter].real++;
+
+    inviteData[inviter].users.push(member.id);
+  }
+
+  saveInvites();
+});
+
+/***********************
+ * TRACK LEAVE
+ ***********************/
+client.on("guildMemberRemove", member => {
+  for (const u in inviteData) {
+    inviteData[u].users = inviteData[u].users.filter(x => x !== member.id);
+  }
+  saveInvites();
+});
+
+/***********************
+ * INVITE COMMAND
+ ***********************/
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "invites") return;
+
+  const sub = interaction.options.getSubcommand();
+
+  // Reset
+  if (sub === "reset") {
+    inviteData = {};
+    saveInvites();
+    return interaction.reply("✅ Invite counter reset.");
+  }
+
+  // User stats
+  if (sub === "user") {
+    const user = interaction.options.getUser("target");
+    const d = inviteData[user.id] || { real: 0, fake: 0, rejoin: 0 };
+
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle(`📊 ${user.username}`)
+          .setColor("Blue")
+          .addFields(
+            { name: "✅ Real", value: `${d.real}`, inline: true },
+            { name: "🤖 Fake", value: `${d.fake}`, inline: true },
+            { name: "🔁 Rejoin", value: `${d.rejoin}`, inline: true }
+          )
+      ]
+    });
+  }
+
+  // Leaderboard
+  if (sub === "leaderboard") {
+    const sorted = Object.entries(inviteData)
+      .sort((a, b) => b[1].real - a[1].real);
+
+    if (!sorted.length)
+      return interaction.reply("❌ No invite data yet.");
+
+    let page = 0;
+    const max = Math.ceil(sorted.length / 10);
+
+    const build = () => {
+      const slice = sorted.slice(page * 10, page * 10 + 10);
+      let desc = "";
+
+      slice.forEach(([id, d], i) => {
+        const rank = page * 10 + i + 1;
+        const medals = ["🥇", "🥈", "🥉"];
+        const medal = medals[rank - 1] || "";
+        desc += `${medal} <@${id}> — **${d.real}**\n`;
+      });
+
+      return new EmbedBuilder()
+        .setTitle("🏆 Invite Leaderboard")
+        .setColor("Gold")
+        .setDescription(desc)
+        .setFooter({ text: `Page ${page + 1}/${max}` });
+    };
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("prev_inv")
+        .setLabel("⬅️")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("next_inv")
+        .setLabel("➡️")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const msg = await interaction.reply({
+      embeds: [build()],
+      components: [row],
+      fetchReply: true
+    });
+
+    const collector = msg.createMessageComponentCollector({ time: 600000 });
+
+    collector.on("collect", i => {
+      if (i.user.id !== interaction.user.id)
+        return i.reply({ content: "❌ Not yours.", ephemeral: true });
+
+      if (i.customId === "prev_inv" && page > 0) page--;
+      if (i.customId === "next_inv" && page < max - 1) page++;
+
+      i.update({ embeds: [build()] });
+    });
+  }
+});
 // Giveaway Map
 let giveaways = new Map();
 
@@ -57,6 +224,21 @@ client.once(Events.ClientReady, () => {
  ***********************/
 async function registerCommands() {
   const commands = [
+    new SlashCommandBuilder()
+  .setName("invites")
+  .setDescription("Invite system")
+  .addSubcommand(s =>
+    s.setName("user")
+      .setDescription("Check user invites")
+      .addUserOption(o =>
+        o.setName("target").setRequired(true)))
+  .addSubcommand(s =>
+    s.setName("leaderboard")
+      .setDescription("Leaderboard"))
+  .addSubcommand(s =>
+    s.setName("reset")
+      .setDescription("Reset data"))
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     new SlashCommandBuilder()
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
@@ -219,12 +401,9 @@ client.on(Events.InteractionCreate, async interaction => {
       const winnersCount = interaction.options.getInteger("winners");
       const prize = interaction.options.getString("prize");
 
-      const totalTime = ms(duration);
-      const endTime = Date.now() + totalTime;
-
       const giveawayEmbed = new EmbedBuilder()
         .setTitle(`🎁 Giveaway`)
-        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Time Left:** ${duration}`)
+        .setDescription(`**Prize:** ${prize}\n**Winners:** ${winnersCount}\n**Duration:** ${duration}\n**React with 🎉 to enter!**`)
         .setColor("Blue")
         .addFields({ name: "Participants", value: "0", inline: true });
 
@@ -236,28 +415,9 @@ client.on(Events.InteractionCreate, async interaction => {
       );
 
       const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [joinButton], fetchReply: true });
-      const participants = new Set();
-      giveaways.set(msg.id, { participants, winnersCount, prize, message: msg, endTime });
+      giveaways.set(msg.id, { participants: new Set(), winnersCount, prize, message: msg });
 
-      // تحديث الوقت كل ثانية
-      const interval = setInterval(async () => {
-        const g = giveaways.get(msg.id);
-        if (!g) return clearInterval(interval);
-
-        const remaining = g.endTime - Date.now();
-        if (remaining <= 0) {
-          clearInterval(interval);
-          return endGiveaway(msg.id);
-        }
-
-        const remainingMS = ms(remaining, { long: true });
-        const embed = EmbedBuilder.from(msg.embeds[0])
-          .setDescription(`**Prize:** ${g.prize}\n**Winners:** ${g.winnersCount}\n**Time Left:** ${remainingMS}`)
-          .spliceFields(0, 1)
-          .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
-
-        await g.message.edit({ embeds: [embed] });
-      }, 1000);
+      setTimeout(() => endGiveaway(msg.id), ms(duration));
     }
 
     // Giveaway End
@@ -314,6 +474,10 @@ client.on(Events.InteractionCreate, async interaction => {
       for (const [msgId, g] of giveaways.entries()) {
         if (g.message.id === interaction.message.id) {
           g.participants.add(interaction.user.id);
+          const embed = EmbedBuilder.from(g.message.embeds[0])
+            .spliceFields(0, 1)
+            .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
+          await g.message.edit({ embeds: [embed] });
           return interaction.reply({ content: "✅ You entered the giveaway!", ephemeral: true });
         }
       }
@@ -472,5 +636,4 @@ async function rerollGiveaway(msgId, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
-
 
