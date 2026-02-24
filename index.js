@@ -1,6 +1,8 @@
 require("dotenv").config();
 const fs = require("fs");
+const archiver = require("archiver");
 const ms = require("ms");
+
 const {
   Client,
   GatewayIntentBits,
@@ -8,6 +10,9 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   ChannelType,
   Events,
   SlashCommandBuilder,
@@ -17,196 +22,276 @@ const {
 } = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
+/***********************
+ * CONFIG
+ ***********************/
+const TICKET_CATEGORY_ID = "1414954122918236171";
+const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
-const STAFF_ROLE = "1414301511579598858";
+const STAFF_ROLE_ID = "1414301511579598858";
+const ADMIN_ROLE_ID = "1414301511579598858";
 
-/**************** INVITES ****************/
-let inviteData = fs.existsSync("./invites.json")
-  ? JSON.parse(fs.readFileSync("./invites.json"))
-  : {};
+const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
+const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
-function saveInvites() {
-  fs.writeFileSync("./invites.json", JSON.stringify(inviteData, null, 2));
-}
+let giveaways = new Map();
 
-/**************** READY ****************/
-client.once("ready", async () => {
+/***********************
+ * READY
+ ***********************/
+client.once(Events.ClientReady, async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-  registerCommands();
+  await registerCommands();
 });
 
-/**************** COMMAND REGISTER ****************/
+/***********************
+ * REGISTER COMMANDS
+ ***********************/
 async function registerCommands() {
+
   const commands = [
-    new SlashCommandBuilder()
-      .setName("invites")
-      .setDescription("Invite system")
-      .addSubcommand(s =>
-        s.setName("user")
-          .setDescription("Check user invites")
-          .addUserOption(o =>
-            o.setName("target")
-              .setDescription("User")
-              .setRequired(true)
-          )
-      )
-      .addSubcommand(s => s.setName("leaderboard").setDescription("Top inviters"))
-      .addSubcommand(s => s.setName("reset").setDescription("Reset invites"))
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
       .setName("ticketpanel")
-      .setDescription("Send ticket panel")
+      .setDescription("Open ticket panel")
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
+      .setName("close")
+      .setDescription("Close ticket")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("paypal-fees")
+      .setDescription("Calculate PayPal fees")
+      .addNumberOption(o =>
+        o.setName("amount")
+          .setDescription("Amount")
+          .setRequired(true)
+      ),
+
+    new SlashCommandBuilder().setName("paypal").setDescription("Show PayPal"),
+    new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
+    new SlashCommandBuilder().setName("payment-methods").setDescription("Show all payment methods"),
+
+    new SlashCommandBuilder()
       .setName("giveaway")
-      .setDescription("Start giveaway")
-      .addStringOption(o =>
-        o.setName("duration").setDescription("ex 1h").setRequired(true)
+      .setDescription("Start a giveaway")
+      .addStringOption(opt =>
+        opt.setName("duration")
+          .setDescription("1h, 30m, 2d")
+          .setRequired(true)
       )
-      .addIntegerOption(o =>
-        o.setName("winners").setDescription("winners").setRequired(true)
+      .addIntegerOption(opt =>
+        opt.setName("winners")
+          .setDescription("Number of winners")
+          .setRequired(true)
       )
-      .addStringOption(o =>
-        o.setName("prize").setDescription("prize").setRequired(true)
+      .addStringOption(opt =>
+        opt.setName("prize")
+          .setDescription("Prize description")
+          .setRequired(true)
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("giveaway_end")
+      .setDescription("End giveaway")
+      .addStringOption(opt =>
+        opt.setName("message_id")
+          .setDescription("Message ID")
+          .setRequired(true)
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    new SlashCommandBuilder()
+      .setName("giveaway_reroll")
+      .setDescription("Reroll giveaway")
+      .addStringOption(opt =>
+        opt.setName("message_id")
+          .setDescription("Message ID")
+          .setRequired(true)
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
-    body: commands
-  });
+  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
 
-  console.log("✅ Commands loaded");
+  console.log("✅ Commands registered");
 }
 
-/**************** COMMAND HANDLER ****************/
+/***********************
+ * INTERACTIONS
+ ***********************/
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
 
-  /************** INVITES **************/
-  if (interaction.commandName === "invites") {
-    const sub = interaction.options.getSubcommand();
+  if (interaction.isChatInputCommand()) {
 
-    if (sub === "user") {
-      const user = interaction.options.getUser("target");
-      const data = inviteData[user.id] || { real: 0, fake: 0 };
+    // PAYPAL FEES
+    if (interaction.commandName === "paypal-fees") {
+      const amount = interaction.options.getNumber("amount");
+      const fee = (amount * 0.0449) + 0.6;
+      const after = amount - fee;
+      const send = amount + fee;
 
       const embed = new EmbedBuilder()
-        .setTitle(`Invites for ${user.username}`)
+        .setColor("#009cde")
+        .setTitle("PayPal Fee Calculator")
         .addFields(
-          { name: "Real", value: `${data.real}`, inline: true },
-          { name: "Fake", value: `${data.fake}`, inline: true }
+          { name: "Original", value: `$${amount.toFixed(2)}`, inline: true },
+          { name: "Fee", value: `$${fee.toFixed(2)}`, inline: true },
+          { name: "After Fee", value: `$${after.toFixed(2)}`, inline: true },
+          { name: "You Send", value: `$${send.toFixed(2)}`, inline: true }
         );
 
       return interaction.reply({ embeds: [embed] });
     }
 
-    if (sub === "leaderboard") {
-      const sorted = Object.entries(inviteData).sort(
-        (a, b) => b[1].real - a[1].real
+    if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
+    if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
+    if (interaction.commandName === "payment-methods") return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
+
+    if (interaction.commandName === "ticketpanel") {
+      const embed = new EmbedBuilder()
+        .setTitle("🎫 Ticket System")
+        .setDescription("Choose ticket type")
+        .setColor("Blue");
+
+      const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("ticket_purchase").setLabel("Purchase").setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId("ticket_seller").setLabel("Seller Application").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("ticket_report").setLabel("Report").setStyle(ButtonStyle.Danger)
       );
 
-      let desc = sorted
-        .slice(0, 10)
-        .map((x, i) => `${i + 1}. <@${x[0]}> → ${x[1].real}`)
-        .join("\n");
+      return interaction.reply({ embeds: [embed], components: [buttons] });
+    }
 
-      if (!desc) desc = "No data";
+    if (interaction.commandName === "giveaway") {
 
-      return interaction.reply({
-        embeds: [new EmbedBuilder().setTitle("Leaderboard").setDescription(desc)]
+      const duration = interaction.options.getString("duration");
+      const winnersCount = interaction.options.getInteger("winners");
+      const prize = interaction.options.getString("prize");
+
+      const embed = new EmbedBuilder()
+        .setTitle("🎁 Giveaway")
+        .setDescription(`Prize: ${prize}\nWinners: ${winnersCount}\nDuration: ${duration}`)
+        .addFields({ name: "Participants", value: "0", inline: true })
+        .setColor("Blue");
+
+      const button = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("giveaway_join")
+          .setLabel("🎉 Enter")
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const msg = await interaction.reply({ embeds: [embed], components: [button], fetchReply: true });
+
+      giveaways.set(msg.id, {
+        participants: new Set(),
+        winnersCount,
+        prize,
+        message: msg
       });
+
+      setTimeout(() => endGiveaway(msg.id), ms(duration));
     }
 
-    if (sub === "reset") {
-      inviteData = {};
-      saveInvites();
-      return interaction.reply("✅ Reset done");
+    if (interaction.commandName === "giveaway_end") {
+      const id = interaction.options.getString("message_id");
+      return endGiveaway(id, interaction);
+    }
+
+    if (interaction.commandName === "giveaway_reroll") {
+      const id = interaction.options.getString("message_id");
+      return rerollGiveaway(id, interaction);
     }
   }
 
-  /************** TICKETS **************/
-  if (interaction.commandName === "ticketpanel") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎫 Tickets")
-      .setDescription("Click button");
+  if (interaction.isButton()) {
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("ticket")
-        .setLabel("Open Ticket")
-        .setStyle(ButtonStyle.Primary)
-    );
+    if (interaction.customId === "giveaway_join") {
 
-    return interaction.reply({ embeds: [embed], components: [row] });
-  }
+      const g = giveaways.get(interaction.message.id);
+      if (!g) return interaction.reply({ content: "❌ Giveaway expired.", ephemeral: true });
 
-  /************** GIVEAWAY **************/
-  if (interaction.commandName === "giveaway") {
-    const duration = interaction.options.getString("duration");
-    const winners = interaction.options.getInteger("winners");
-    const prize = interaction.options.getString("prize");
+      if (g.participants.has(interaction.user.id))
+        return interaction.reply({ content: "❌ You already joined.", ephemeral: true });
 
-    const end = Date.now() + ms(duration);
+      g.participants.add(interaction.user.id);
 
-    const embed = new EmbedBuilder()
-      .setTitle("🎉 GIVEAWAY")
-      .setDescription(
-        `Prize: **${prize}**\nEnds: <t:${Math.floor(end / 1000)}:R>\nWinners: ${winners}`
-      );
+      const embed = EmbedBuilder.from(g.message.embeds[0])
+        .spliceFields(0, 1)
+        .addFields({ name: "Participants", value: `${g.participants.size}`, inline: true });
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("join")
-        .setLabel("Enter")
-        .setStyle(ButtonStyle.Success)
-    );
+      await g.message.edit({ embeds: [embed] });
 
-    return interaction.reply({ embeds: [embed], components: [row] });
+      return interaction.reply({ content: "✅ You entered!", ephemeral: true });
+    }
   }
 });
 
-/**************** BUTTONS ****************/
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isButton()) return;
+/***********************
+ * GIVEAWAY FUNCTIONS
+ ***********************/
+async function endGiveaway(msgId, interaction) {
 
-  if (interaction.customId === "ticket") {
-    const channel = await interaction.guild.channels.create({
-      name: `ticket-${interaction.user.username}`,
-      type: ChannelType.GuildText,
-      permissionOverwrites: [
-        {
-          id: interaction.guild.id,
-          deny: ["ViewChannel"]
-        },
-        {
-          id: interaction.user.id,
-          allow: ["ViewChannel", "SendMessages"]
-        }
-      ]
-    });
+  const g = giveaways.get(msgId);
+  if (!g) return interaction?.reply?.({ content: "❌ Giveaway not found.", ephemeral: true });
 
-    return interaction.reply({
-      content: `Ticket created: ${channel}`,
-      ephemeral: true
-    });
+  giveaways.delete(msgId);
+
+  const entries = Array.from(g.participants);
+
+  if (!entries.length) {
+    await g.message.edit({ content: "❌ No participants.", embeds: [], components: [] });
+    return;
   }
 
-  if (interaction.customId === "join") {
-    return interaction.reply({ content: "✅ Joined!", ephemeral: true });
+  const winners = [];
+  while (winners.length < Math.min(g.winnersCount, entries.length)) {
+    const rand = entries[Math.floor(Math.random() * entries.length)];
+    if (!winners.includes(rand)) winners.push(rand);
   }
-});
 
-/**************** LOGIN ****************/
+  await g.message.edit({
+    content: `🎉 Winners: ${winners.map(id => `<@${id}>`).join(", ")}`,
+    embeds: [],
+    components: []
+  });
+
+  interaction?.reply?.({ content: "✅ Giveaway ended.", ephemeral: true });
+}
+
+async function rerollGiveaway(msgId, interaction) {
+
+  const g = giveaways.get(msgId);
+  if (!g) return interaction.reply({ content: "❌ Giveaway not active.", ephemeral: true });
+
+  const entries = Array.from(g.participants);
+  if (!entries.length) return interaction.reply({ content: "❌ No participants.", ephemeral: true });
+
+  const winner = entries[Math.floor(Math.random() * entries.length)];
+
+  await g.message.edit({
+    content: `🎉 New Winner: <@${winner}>`,
+    embeds: [],
+    components: []
+  });
+
+  return interaction.reply({ content: "✅ Rerolled.", ephemeral: true });
+}
+
+/***********************
+ * LOGIN
+ ***********************/
 client.login(process.env.TOKEN);
-
-
-
-
-
