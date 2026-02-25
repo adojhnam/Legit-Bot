@@ -117,9 +117,12 @@ async function registerCommands() {
 
     new SlashCommandBuilder()
       .setName("reroll")
-      .setDescription("Reroll giveaway")
+      .setDescription("Reroll giveaway winners")
       .addStringOption((o) =>
-        o.setName("message_id").setRequired(true)
+        o
+          .setName("message_id")
+          .setDescription("Giveaway message ID")
+          .setRequired(true)
       ),
   ].map((c) => c.toJSON());
 
@@ -438,6 +441,3 @@ async function rerollGiveaway(id, interaction) {
 }
 
 client.login(process.env.TOKEN);
-
-
-
