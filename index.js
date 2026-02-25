@@ -1,5 +1,5 @@
 // ======================================
-Lgeit Bot
+
 // ======================================
 
 require("dotenv").config();
@@ -364,5 +364,6 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
