@@ -254,7 +254,7 @@ client.on(Events.InteractionCreate, async interaction => {
       ]);
     }
   }
-
+});
     // GIVEAWAY
     new SlashCommandBuilder()
       .setName("giveaway")
@@ -482,4 +482,5 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
