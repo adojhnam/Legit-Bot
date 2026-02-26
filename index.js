@@ -30,53 +30,6 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-  ],
-});
-
-/***********************
- * CONFIG
- ***********************/
-const TICKET_CATEGORY_ID = "1414954122918236171";
-const LOG_CHANNEL_ID = "1470080063792742410";
-const GUILD_ID = "1412911390494036072";
-const STAFF_ROLE_ID = "1414301511579598858";
-const ADMIN_ROLE_ID = "1414301511579598858";
-
-const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
-const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
-
-// ======================================
-// Lgeit Bot - Full Code with Invites Leaderboard
-// ======================================
-
-require("dotenv").config();
-const fs = require("fs");
-const archiver = require("archiver");
-const ms = require("ms");
-
-const {
-  Client,
-  GatewayIntentBits,
-  ActionRowBuilder,
-  ButtonBuilder,
-  EmbedBuilder,
-  ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ChannelType,
-  Events,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-  PermissionFlagsBits,
-} = require("discord.js");
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
 });
@@ -581,6 +534,7 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
