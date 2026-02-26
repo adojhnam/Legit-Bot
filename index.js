@@ -90,40 +90,47 @@ client.once(Events.ClientReady, async () => {
  ***********************/
 async function registerCommands() {
   const commands = [
+  new SlashCommandBuilder()
+    .setName("invites")
+    .setDescription("Check your invites or someone else's invites")
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("Select a user to check their invites")
+        .setRequired(false)
+    ),
 
-    new SlashCommandBuilder().setName("ticketpanel").setDescription("Open ticket panel").setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder().setName("close").setDescription("Close ticket").setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder().setName("paypal-fees").setDescription("Calculate PayPal fees").addNumberOption(o => o.setName("amount").setRequired(true).setDescription("Amount")),
-    new SlashCommandBuilder().setName("paypal").setDescription("Show PayPal"),
-    new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
-    new SlashCommandBuilder().setName("payment-methods").setDescription("Show all payment methods"),
+  new SlashCommandBuilder()
+    .setName("leaderboard")
+    .setDescription("Show the invites leaderboard"),
 
-    new SlashCommandBuilder()
-      .setName("giveaway")
-      .setDescription("Giveaway system")
-      .addSubcommand(s => s.setName("start")
-        .addStringOption(o => o.setName("duration").setRequired(true).setDescription("10m 1h 1d"))
-        .addIntegerOption(o => o.setName("winners").setRequired(true).setDescription("Winners"))
-        .addStringOption(o => o.setName("prize").setRequired(true).setDescription("Prize")))
-      .addSubcommand(s => s.setName("reroll")
-        .addStringOption(o => o.setName("message_id").setRequired(true)))
-      .addSubcommand(s => s.setName("end")
-        .addStringOption(o => o.setName("message_id").setRequired(true)))
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-
-    new SlashCommandBuilder()
-      .setName("invites")
-      .setDescription("Check invite count")
-      .addUserOption(o => o.setName("user").setDescription("User")),
-
-    new SlashCommandBuilder().setName("leaderboard").setDescription("Top inviters"),
-
-    new SlashCommandBuilder()
-      .setName("invite-giveaway")
-      .setDescription("Pick winner based on invites")
-      .addIntegerOption(o => o.setName("invites").setRequired(true).setDescription("Required invites"))
-
-  ].map(c => c.toJSON());
+  new SlashCommandBuilder()
+    .setName("giveaway")
+    .setDescription("Manage giveaways")
+    .addSubcommand(sub =>
+      sub
+        .setName("start")
+        .setDescription("Start a new giveaway")
+        .addStringOption(option =>
+          option
+            .setName("prize")
+            .setDescription("The giveaway prize")
+            .setRequired(true)
+        )
+        .addIntegerOption(option =>
+          option
+            .setName("duration")
+            .setDescription("Duration in minutes")
+            .setRequired(true)
+        )
+        .addIntegerOption(option =>
+          option
+            .setName("winners")
+            .setDescription("Number of winners")
+            .setRequired(true)
+        )
+    )
+].map(command => command.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
@@ -218,3 +225,4 @@ client.on(Events.InteractionCreate, async interaction => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
