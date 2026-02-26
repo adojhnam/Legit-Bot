@@ -492,7 +492,8 @@ function scheduleUpdate(id) {
  ***********************/
 async function endGiveaway(id) {
   const g = giveaways.get(id);
-  if (!g)
+  if (!g) return; // لو ما موجود، نوقف التنفيذ
+
   const channel = await client.channels.fetch(g.channelId);
   const msg = await channel.messages.fetch(id);
   if (!g.users.size) return msg.edit({ content: "No participants", embeds: [], components: [] });
@@ -513,7 +514,6 @@ async function endGiveaway(id) {
     if (member) member.send(`🎉 You won **${g.prize}** in ${channel.guild.name}!`).catch(() => {});
   }
 }
-
 /***********************
  * REROLL GIVEAWAY
  ***********************/
@@ -534,6 +534,7 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
