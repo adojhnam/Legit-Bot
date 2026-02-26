@@ -45,6 +45,54 @@ const ADMIN_ROLE_ID = "1414301511579598858";
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
+// ======================================
+// Lgeit Bot - Full Code with Invites Leaderboard
+// ======================================
+
+require("dotenv").config();
+const fs = require("fs");
+const archiver = require("archiver");
+const ms = require("ms");
+
+const {
+  Client,
+  GatewayIntentBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  EmbedBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ChannelType,
+  Events,
+  SlashCommandBuilder,
+  REST,
+  Routes,
+  PermissionFlagsBits,
+} = require("discord.js");
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers,
+  ],
+});
+
+/***********************
+ * CONFIG
+ ***********************/
+const TICKET_CATEGORY_ID = "1414954122918236171";
+const LOG_CHANNEL_ID = "1470080063792742410";
+const GUILD_ID = "1412911390494036072";
+const STAFF_ROLE_ID = "1414301511579598858";
+const ADMIN_ROLE_ID = "1414301511579598858";
+
+const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
+const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
+
 /***********************
  * GIVEAWAY SETUP
  ***********************/
@@ -142,6 +190,10 @@ async function registerCommands() {
           )
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    new SlashCommandBuilder()
+      .setName("leaderboard")
+      .setDescription("Show invite leaderboard")
+      .setDefaultMemberPermissions(PermissionFlagsBits.ViewChannel),
   ].map((c) => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
@@ -258,6 +310,55 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await endGiveaway(interaction.options.getString("message_id"));
         return interaction.reply({ ephemeral: true, content: "Ended" });
       }
+    }
+
+    // INVITE LEADERBOARD
+    if (interaction.commandName === "leaderboard") {
+      const guild = await client.guilds.fetch(GUILD_ID);
+      await guild.invites.fetch().then((invites) => {
+        const inviteData = [];
+        invites.each((i) => inviteData.push({ inviter: i.inviter, uses: i.uses || 0 }));
+
+        // Aggregate per user
+        const map = new Map();
+        inviteData.forEach((i) => {
+          if (!i.inviter) return;
+          map.set(i.inviter.id, (map.get(i.inviter.id) || 0) + i.uses);
+        });
+
+        const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+
+        const pages = [];
+        const perPage = 10;
+        for (let i = 0; i < sorted.length; i += perPage) {
+          const page = sorted.slice(i, i + perPage);
+          const embed = new EmbedBuilder()
+            .setTitle("📊 Invite Leaderboard")
+            .setColor("#FFD700")
+            .setDescription(
+              page.map((x, idx) => `${i + idx + 1}. <@${x[0]}> - **${x[1]}** invites`).join("\n")
+            )
+            .setFooter({ text: `Page ${Math.floor(i / perPage) + 1}/${Math.ceil(sorted.length / perPage) || 1}` });
+          pages.push(embed);
+        }
+
+        let page = 0;
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("prev_page").setLabel("⬅️").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("next_page").setLabel("➡️").setStyle(ButtonStyle.Secondary)
+        );
+
+        interaction.reply({ embeds: [pages[page]], components: [row] }).then((msg) => {
+          const filter = (i) => i.user.id === interaction.user.id;
+          const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
+
+          collector.on("collect", (i) => {
+            if (i.customId === "prev_page") page = page > 0 ? page - 1 : pages.length - 1;
+            if (i.customId === "next_page") page = page < pages.length - 1 ? page + 1 : 0;
+            i.update({ embeds: [pages[page]] });
+          });
+        });
+      });
     }
   }
 
@@ -438,10 +539,7 @@ function scheduleUpdate(id) {
  ***********************/
 async function endGiveaway(id) {
   const g = giveaways.get(id);
-  if (!g) return;
-  giveaways.delete(id);
-  saveGiveaways();
-
+  if (!g)
   const channel = await client.channels.fetch(g.channelId);
   const msg = await channel.messages.fetch(id);
   if (!g.users.size) return msg.edit({ content: "No participants", embeds: [], components: [] });
@@ -483,6 +581,7 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
