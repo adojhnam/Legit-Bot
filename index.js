@@ -29,7 +29,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers
   ]
 });
@@ -500,6 +500,7 @@ client.on("interactionCreate", async interaction => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
