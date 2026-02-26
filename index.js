@@ -30,6 +30,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMembers
   ]
 });
 
@@ -359,11 +360,147 @@ async function rerollGiveaway(id, interaction) {
   }
   interaction.reply({ content: `New winners: ${winners.map(x=>`<@${x}>`).join(", ")}` });
 }
+/***********************
+ * INVITE + REWARDS SYSTEM
+ ***********************/
+const INVITE_FILE = "invites.json";
+let invitesData = {};
+let guildInvites = new Map();
 
+if (!fs.existsSync(INVITE_FILE)) fs.writeFileSync(INVITE_FILE, "{}");
+invitesData = JSON.parse(fs.readFileSync(INVITE_FILE));
+
+function saveInvites() {
+  fs.writeFileSync(INVITE_FILE, JSON.stringify(invitesData, null, 2));
+}
+
+/******** REWARD ROLES ********/
+const REWARD_ROLES = {
+  5: "PUT_ROLE_ID",
+  10: "PUT_ROLE_ID",
+  20: "PUT_ROLE_ID"
+};
+
+/***********************
+ * LOAD INVITES
+ ***********************/
+client.once("ready", async () => {
+  const guild = client.guilds.cache.get(GUILD_ID);
+  const invites = await guild.invites.fetch();
+  guildInvites.set(guild.id, invites);
+});
+
+/***********************
+ * JOIN TRACKING
+ ***********************/
+client.on("guildMemberAdd", async member => {
+
+  // Fake check (account age)
+  const accountAge = Date.now() - member.user.createdTimestamp;
+  if (accountAge < 1000 * 60 * 60 * 24 * 3) return; // أقل من 3 أيام = تجاهل
+
+  const newInvites = await member.guild.invites.fetch();
+  const oldInvites = guildInvites.get(member.guild.id);
+
+  const invite = newInvites.find(i => i.uses > (oldInvites.get(i.code)?.uses || 0));
+  guildInvites.set(member.guild.id, newInvites);
+
+  if (!invite) return;
+
+  const inviter = invite.inviter;
+
+  if (!invitesData[inviter.id]) {
+    invitesData[inviter.id] = {
+      invites: 0,
+      joined: [],
+      left: []
+    };
+  }
+
+  // Anti rejoin
+  if (invitesData[inviter.id].joined.includes(member.id)) return;
+
+  invitesData[inviter.id].invites++;
+  invitesData[inviter.id].joined.push(member.id);
+  saveInvites();
+
+  // 🎁 Rewards
+  const count = invitesData[inviter.id].invites;
+  if (REWARD_ROLES[count]) {
+    const role = member.guild.roles.cache.get(REWARD_ROLES[count]);
+    const guildMember = await member.guild.members.fetch(inviter.id).catch(()=>null);
+    if (role && guildMember) guildMember.roles.add(role).catch(()=>{});
+  }
+});
+
+/***********************
+ * LEAVE TRACKING
+ ***********************/
+client.on("guildMemberRemove", member => {
+  for (const id in invitesData) {
+    const data = invitesData[id];
+    if (data.joined.includes(member.id) && !data.left.includes(member.id)) {
+      data.invites--;
+      data.left.push(member.id);
+    }
+  }
+  saveInvites();
+});
+
+/***********************
+ * SLASH COMMANDS
+ ***********************/
+client.on("interactionCreate", async interaction => {
+
+  if (!interaction.isChatInputCommand()) return;
+
+  // INVITES
+  if (interaction.commandName === "invites") {
+    const user = interaction.options.getUser("user") || interaction.user;
+    const data = invitesData[user.id] || { invites: 0 };
+
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor("Blue")
+          .setTitle("Invite Counter")
+          .setDescription(`👤 ${user}\n🎉 Invites: **${data.invites}**`)
+      ]
+    });
+  }
+
+  // LEADERBOARD
+  if (interaction.commandName === "leaderboard") {
+    const sorted = Object.entries(invitesData)
+      .sort((a, b) => b[1].invites - a[1].invites)
+      .slice(0, 10);
+
+    let text = "";
+    sorted.forEach((x, i) => {
+      text += `**${i + 1}.** <@${x[0]}> — ${x[1].invites}\n`;
+    });
+
+    return interaction.reply({ content: text || "No data yet" });
+  }
+
+  // INVITE GIVEAWAY
+  if (interaction.commandName === "invite-giveaway") {
+    const needed = interaction.options.getInteger("invites");
+
+    const winners = Object.entries(invitesData)
+      .filter(x => x[1].invites >= needed);
+
+    if (!winners.length) return interaction.reply("No winners");
+
+    const winner = winners[Math.floor(Math.random() * winners.length)];
+    interaction.reply(`🎉 Winner: <@${winner[0]}>`);
+  }
+});
 /***********************
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
