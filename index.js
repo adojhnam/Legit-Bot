@@ -1,5 +1,5 @@
 // ======================================
-// Lgeit Bot - Updated Full Code
+// Lgeit Bot - Full Ready-to-Run Code
 // ======================================
 
 require("dotenv").config();
@@ -34,9 +34,9 @@ const client = new Client({
   ],
 });
 
-/***********************
- * CONFIG
- ***********************/
+// =====================
+// CONFIG
+// =====================
 const TICKET_CATEGORY_ID = "1414954122918236171";
 const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
@@ -46,9 +46,9 @@ const ADMIN_ROLE_ID = "1414301511579598858";
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
-/***********************
- * GIVEAWAY SETUP
- ***********************/
+// =====================
+// GIVEAWAY SETUP
+// =====================
 const DATA_FILE = "giveaways.json";
 let giveaways = new Map();
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "{}");
@@ -73,94 +73,117 @@ function loadGiveaways() {
   }
 }
 
-/***********************
- * READY
- ***********************/
+// =====================
+// INVITE TRACKER + REJOIN
+// =====================
+const inviteData = new Map(); // guildId -> { userId -> { regular, rejoin } }
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  const guildId = member.guild.id;
+  const invites = await member.guild.invites.fetch().catch(() => new Map());
+
+  if (!inviteData.has(guildId)) inviteData.set(guildId, {});
+  const guildInvites = inviteData.get(guildId);
+  const prev = guildInvites[member.id] || { regular: 0, rejoin: 0 };
+
+  if (prev.left) {
+    prev.rejoin += 1;
+    prev.left = false;
+    guildInvites[member.id] = prev;
+    return;
+  }
+
+  const usedInvite = invites.find((i) => i.uses > (i.prevUses || 0));
+  if (usedInvite && usedInvite.inviter) {
+    const inviterId = usedInvite.inviter.id;
+    if (!guildInvites[inviterId]) guildInvites[inviterId] = { regular: 0, rejoin: 0 };
+    guildInvites[inviterId].regular += 1;
+    guildInvites[inviterId].left = false;
+  }
+
+  inviteData.set(guildId, guildInvites);
+  invites.forEach((i) => (i.prevUses = i.uses));
+});
+
+client.on(Events.GuildMemberRemove, (member) => {
+  const guildId = member.guild.id;
+  if (!inviteData.has(guildId)) return;
+  const guildInvites = inviteData.get(guildId);
+  if (!guildInvites[member.id]) guildInvites[member.id] = { regular: 0, rejoin: 0 };
+  guildInvites[member.id].left = true;
+});
+
+// =====================
+// READY
+// =====================
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
   await registerCommands();
+  await registerInviteCommands();
   loadGiveaways();
 });
 
-/***********************
- * REGISTER COMMANDS
- ***********************/
+// =====================
+// REGISTER COMMANDS
+// =====================
 async function registerCommands() {
   const commands = [
-    new SlashCommandBuilder()
-      .setName("ticketpanel")
-      .setDescription("Open ticket panel")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder()
-      .setName("close")
-      .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-    new SlashCommandBuilder()
-      .setName("paypal-fees")
-      .setDescription("Calculate PayPal fees")
-      .addNumberOption((o) =>
-        o.setName("amount").setDescription("Amount").setRequired(true)
-      ),
+    new SlashCommandBuilder().setName("ticketpanel").setDescription("Open ticket panel").setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    new SlashCommandBuilder().setName("close").setDescription("Close ticket").setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    new SlashCommandBuilder().setName("paypal-fees").setDescription("Calculate PayPal fees").addNumberOption(o => o.setName("amount").setDescription("Amount").setRequired(true)),
     new SlashCommandBuilder().setName("paypal").setDescription("Show PayPal"),
     new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
-    new SlashCommandBuilder()
-      .setName("payment-methods")
-      .setDescription("Show all payment methods"),
+    new SlashCommandBuilder().setName("payment-methods").setDescription("Show all payment methods"),
     new SlashCommandBuilder()
       .setName("giveaway")
       .setDescription("Giveaway system")
-      .addSubcommand((s) =>
-        s
-          .setName("start")
-          .setDescription("Start giveaway")
-          .addStringOption((o) =>
-            o
-              .setName("duration")
-              .setDescription("10m 1h 1d")
-              .setRequired(true)
-          )
-          .addIntegerOption((o) =>
-            o.setName("winners").setDescription("Winners").setRequired(true)
-          )
-          .addStringOption((o) =>
-            o.setName("prize").setDescription("Prize").setRequired(true)
-          )
-      )
-      .addSubcommand((s) =>
-        s
-          .setName("reroll")
-          .setDescription("Reroll")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true).setDescription("Message ID")
-          )
-      )
-      .addSubcommand((s) =>
-        s
-          .setName("end")
-          .setDescription("End")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true).setDescription("Message ID")
-          )
-      )
+      .addSubcommand(s => s.setName("start").setDescription("Start giveaway").addStringOption(o => o.setName("duration").setDescription("10m 1h 1d").setRequired(true)).addIntegerOption(o => o.setName("winners").setDescription("Winners").setRequired(true)).addStringOption(o => o.setName("prize").setDescription("Prize").setRequired(true)))
+      .addSubcommand(s => s.setName("reroll").setDescription("Reroll").addStringOption(o => o.setName("message_id").setRequired(true).setDescription("Message ID")))
+      .addSubcommand(s => s.setName("end").setDescription("End").addStringOption(o => o.setName("message_id").setRequired(true).setDescription("Message ID")))
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-    new SlashCommandBuilder()
-      .setName("leaderboard")
-      .setDescription("Show invite leaderboard")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ViewChannel),
-  ].map((c) => c.toJSON());
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Show invite leaderboard").setDefaultMemberPermissions(PermissionFlagsBits.ViewChannel),
+  ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
-    body: commands,
-  });
+  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
   console.log("✅ Commands registered");
 }
 
-/***********************
- * INTERACTIONS
- ***********************/
-client.on(Events.InteractionCreate, async (interaction) => {
+// =====================
+// REGISTER INVITE COMMANDS
+// =====================
+async function registerInviteCommands() {
+  const commands = [
+    new SlashCommandBuilder().setName("invites").setDescription("Show a user's invites & rejoins").addUserOption(o => o.setName("user").setDescription("User").setRequired(true)).toJSON(),
+    new SlashCommandBuilder().setName("reset-invites").setDescription("Reset all invite data for this guild").toJSON(),
+  ];
+
+  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+  console.log("✅ Invite commands registered");
+}
+
+// =====================
+// INTERACTIONS HANDLING
+// =====================
+client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isChatInputCommand()) {
+    const guildId = interaction.guildId;
+    if (!inviteData.has(guildId)) inviteData.set(guildId, {});
+    const guildInvites = inviteData.get(guildId);
+
+    // INVITE COMMANDS
+    if (interaction.commandName === "invites") {
+      const user = interaction.options.getUser("user");
+      const data = guildInvites[user.id] || { regular: 0, rejoin: 0 };
+      return interaction.reply({ content: `📊 **${user.tag} Invites**\n- Regular Invites: ${data.regular}\n- Rejoins: ${data.rejoin}`, ephemeral: true });
+    }
+
+    if (interaction.commandName === "reset-invites") {
+      inviteData.set(guildId, {});
+      return interaction.reply({ content: "✅ All invite data reset.", ephemeral: true });
+    }
+
     // PAYPAL FEES
     if (interaction.commandName === "paypal-fees") {
       const amount = interaction.options.getNumber("amount");
@@ -534,6 +557,7 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
