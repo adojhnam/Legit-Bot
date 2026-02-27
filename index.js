@@ -162,6 +162,24 @@ async function registerCommands() {
   const commands = [
     new SlashCommandBuilder()
   .setName("invites")
+  .setDescription("Show invite stats")
+  .addUserOption(o =>
+    o.setName("user").setDescription("Target user")
+  ),
+
+new SlashCommandBuilder()
+  .setName("resetinvites")
+  .setDescription("Reset user invites")
+  .addUserOption(o =>
+    o.setName("user").setDescription("Target user").setRequired(true)
+  )
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+new SlashCommandBuilder()
+  .setName("leaderboard")
+  .setDescription("Invite leaderboard")
+    new SlashCommandBuilder()
+  .setName("invites")
   .setDescription("Show user invites")
   .addUserOption((o) =>
     o.setName("user").setDescription("User")
@@ -240,6 +258,117 @@ async function registerCommands() {
  ***********************/
 client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === "invites") {
+  const user = interaction.options.getUser("user") || interaction.user;
+  const data = inviteData[user.id];
+
+  if (!data) {
+    return interaction.reply({
+      content: "No invite data found.",
+      ephemeral: true,
+    });
+  }
+
+  const total = data.joins + data.rejoin;
+
+  const embed = new EmbedBuilder()
+    .setColor("#00ff99")
+    .setTitle("📨 Invite Stats")
+    .setDescription(`Stats for ${user}`)
+    .addFields(
+      { name: "Joins", value: `${data.joins}`, inline: true },
+      { name: "Rejoins", value: `${data.rejoin}`, inline: true },
+      { name: "Total", value: `${total}`, inline: true }
+    );
+
+  return interaction.reply({ embeds: [embed] });
+}
+    if (interaction.commandName === "resetinvites") {
+  const user = interaction.options.getUser("user");
+
+  if (!inviteData[user.id]) {
+    return interaction.reply({
+      content: "User has no invite data.",
+      ephemeral: true,
+    });
+  }
+
+  delete inviteData[user.id];
+  saveInvites();
+
+  return interaction.reply({
+    content: `✅ Invite data reset for ${user.tag}`,
+  });
+}
+    if (interaction.commandName === "leaderboard") {
+
+  const sorted = Object.entries(inviteData)
+    .map(([id, data]) => ({
+      id,
+      total: data.joins + data.rejoin
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  if (!sorted.length) {
+    return interaction.reply("No invite data yet.");
+  }
+
+  const perPage = 10;
+  let page = 0;
+
+  function generateEmbed(page) {
+    const start = page * perPage;
+    const current = sorted.slice(start, start + perPage);
+
+    return new EmbedBuilder()
+      .setColor("#FFD700")
+      .setTitle("🏆 Invite Leaderboard")
+      .setDescription(
+        current
+          .map((u, i) =>
+            `${start + i + 1}. <@${u.id}> — **${u.total}** invites`
+          )
+          .join("\n")
+      )
+      .setFooter({
+        text: `Page ${page + 1}/${Math.ceil(sorted.length / perPage)}`
+      });
+  }
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("lb_prev")
+      .setLabel("⬅️")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId("lb_next")
+      .setLabel("➡️")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const msg = await interaction.reply({
+    embeds: [generateEmbed(page)],
+    components: [row],
+    fetchReply: true,
+  });
+
+  const collector = msg.createMessageComponentCollector({
+    time: 60000,
+  });
+
+  collector.on("collect", async (i) => {
+    if (i.user.id !== interaction.user.id)
+      return i.reply({ content: "Not for you.", ephemeral: true });
+
+    if (i.customId === "lb_prev")
+      page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
+
+    if (i.customId === "lb_next")
+      page = page < Math.ceil(sorted.length / perPage) - 1 ? page + 1 : 0;
+
+    await i.update({ embeds: [generateEmbed(page)] });
+  });
+}
     if (interaction.commandName === "invites") {
   const user = interaction.options.getUser("user") || interaction.user;
   const data = inviteData[user.id];
@@ -633,3 +762,4 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
