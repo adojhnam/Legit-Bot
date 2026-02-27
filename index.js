@@ -1,7 +1,3 @@
-// ======================================
-// Lgeit Bot - Updated Full Code
-// ======================================
-
 require("dotenv").config();
 const fs = require("fs");
 const archiver = require("archiver");
@@ -45,6 +41,7 @@ const ADMIN_ROLE_ID = "1414301511579598858";
 
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
+
 /***********************
  * INVITE TRACKING
  ***********************/
@@ -61,6 +58,7 @@ function loadInvites() {
 function saveInvites() {
   fs.writeFileSync(INVITE_FILE, JSON.stringify(inviteData, null, 2));
 }
+
 /***********************
  * GIVEAWAY SETUP
  ***********************/
@@ -93,7 +91,6 @@ function loadGiveaways() {
  ***********************/
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-
   loadInvites();
   loadGiveaways();
 
@@ -105,7 +102,8 @@ client.once(Events.ClientReady, async () => {
     new Map(invites.map((i) => [i.code, i.uses]))
   );
 });
- /***********************
+
+/***********************
  * INVITE EVENTS
  ***********************/
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -116,27 +114,22 @@ client.on(Events.GuildMemberAdd, async (member) => {
     new Map(newInvites.map((i) => [i.code, i.uses]))
   );
 
-  const used = newInvites.find(
-    (i) => cached.get(i.code) < i.uses
-  );
-
+  const used = newInvites.find((i) => cached.get(i.code) < i.uses);
   if (!used) return;
 
   const inviter = used.inviter;
   if (!inviter) return;
 
   if (!inviteData[inviter.id])
-    inviteData[inviter.id] = { joins: 0, rejoin: 0 };
+    inviteData[inviter.id] = { joins: 0, rejoin: 0, last: [] };
 
-  if (inviteData[inviter.id].last?.includes(member.id)) {
+  if (inviteData[inviter.id].last.includes(member.id)) {
     inviteData[inviter.id].rejoin++;
   } else {
     inviteData[inviter.id].joins++;
   }
 
-  inviteData[inviter.id].last ??= [];
   inviteData[inviter.id].last.push(member.id);
-
   saveInvites();
 });
 
@@ -155,94 +148,61 @@ client.on(Events.InviteDelete, async (invite) => {
     new Map(invites.map((i) => [i.code, i.uses]))
   );
 });
+
 /***********************
  * REGISTER COMMANDS
  ***********************/
 async function registerCommands() {
   const commands = [
     new SlashCommandBuilder()
-  .setName("invites")
-  .setDescription("Show invite stats")
-  .addUserOption(o =>
-    o.setName("user").setDescription("Target user")
-  ),
+      .setName("invites")
+      .setDescription("Show invite stats")
+      .addUserOption((o) =>
+        o.setName("user").setDescription("Target user")
+      )
+      .toJSON(),
 
-new SlashCommandBuilder()
-  .setName("resetinvites")
-  .setDescription("Reset ALL invites")
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-new SlashCommandBuilder()
-  .setName("leaderboard")
-  .setDescription("Invite leaderboard")
     new SlashCommandBuilder()
-  .setName("invites")
-  .setDescription("Show user invites")
-  .addUserOption((o) =>
-    o.setName("user").setDescription("User")
-  ),
+      .setName("resetinvites")
+      .setDescription("Reset ALL invites")
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("leaderboard")
+      .setDescription("Invite leaderboard")
+      .toJSON(),
+
     new SlashCommandBuilder()
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+      .toJSON(),
+
     new SlashCommandBuilder()
       .setName("close")
       .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+      .toJSON(),
+
     new SlashCommandBuilder()
       .setName("paypal-fees")
       .setDescription("Calculate PayPal fees")
       .addNumberOption((o) =>
         o.setName("amount").setDescription("Amount").setRequired(true)
-      ),
-    new SlashCommandBuilder().setName("paypal").setDescription("Show PayPal"),
-    new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
-    new SlashCommandBuilder()
-      .setName("payment-methods")
-      .setDescription("Show all payment methods"),
-    new SlashCommandBuilder()
-      .setName("giveaway")
-      .setDescription("Giveaway system")
-      .addSubcommand((s) =>
-        s
-          .setName("start")
-          .setDescription("Start giveaway")
-          .addStringOption((o) =>
-            o
-              .setName("duration")
-              .setDescription("10m 1h 1d")
-              .setRequired(true)
-          )
-          .addIntegerOption((o) =>
-            o.setName("winners").setDescription("Winners").setRequired(true)
-          )
-          .addStringOption((o) =>
-            o.setName("prize").setDescription("Prize").setRequired(true)
-          )
       )
-      .addSubcommand((s) =>
-        s
-          .setName("reroll")
-          .setDescription("Reroll")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true).setDescription("Message ID")
-          )
-      )
-      .addSubcommand((s) =>
-        s
-          .setName("end")
-          .setDescription("End")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true).setDescription("Message ID")
-          )
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+      .toJSON(),
+
     new SlashCommandBuilder()
-      .setName("leaderboard")
-      .setDescription("Show invite leaderboard")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ViewChannel),
-  ].map((c) => c.toJSON());
+      .setName("paypal")
+      .setDescription("Show PayPal")
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName("binance")
+      .setDescription("Show Binance")
+      .toJSON(),
+  ];
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
@@ -250,293 +210,183 @@ new SlashCommandBuilder()
   });
   console.log("✅ Commands registered");
 }
-
 /***********************
  * INTERACTIONS
  ***********************/
 client.on(Events.InteractionCreate, async (interaction) => {
+
   if (interaction.isChatInputCommand()) {
+
+    // INVITES
     if (interaction.commandName === "invites") {
-  const user = interaction.options.getUser("user") || interaction.user;
-  const data = inviteData[user.id];
+      const user = interaction.options.getUser("user") || interaction.user;
+      const data = inviteData[user.id];
 
-  if (!data) {
-    return interaction.reply({
-      content: "No invite data found.",
-      ephemeral: true,
-    });
-  }
+      if (!data)
+        return interaction.reply({ content: "No invite data.", ephemeral: true });
 
-  const total = data.joins + data.rejoin;
-
-  const embed = new EmbedBuilder()
-    .setColor("#00ff99")
-    .setTitle("📨 Invite Stats")
-    .setDescription(`Stats for ${user}`)
-    .addFields(
-      { name: "Joins", value: `${data.joins}`, inline: true },
-      { name: "Rejoins", value: `${data.rejoin}`, inline: true },
-      { name: "Total", value: `${total}`, inline: true }
-    );
-
-  return interaction.reply({ embeds: [embed] });
-}
-   if (interaction.commandName === "resetinvites") {
-
-  inviteData = {}; // تصفير الجميع
-  saveInvites();
-
-  return interaction.reply({
-    content: "✅ All invite data has been reset.",
-  });
-}
-    if (interaction.commandName === "leaderboard") {
-
-  const sorted = Object.entries(inviteData)
-    .map(([id, data]) => ({
-      id,
-      total: data.joins + data.rejoin
-    }))
-    .sort((a, b) => b.total - a.total);
-
-  if (!sorted.length) {
-    return interaction.reply("No invite data yet.");
-  }
-
-  const perPage = 10;
-  let page = 0;
-
-  function generateEmbed(page) {
-    const start = page * perPage;
-    const current = sorted.slice(start, start + perPage);
-
-    return new EmbedBuilder()
-      .setColor("#FFD700")
-      .setTitle("🏆 Invite Leaderboard")
-      .setDescription(
-        current
-          .map((u, i) =>
-            `${start + i + 1}. <@${u.id}> — **${u.total}** invites`
-          )
-          .join("\n")
-      )
-      .setFooter({
-        text: `Page ${page + 1}/${Math.ceil(sorted.length / perPage)}`
-      });
-  }
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("lb_prev")
-      .setLabel("⬅️")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId("lb_next")
-      .setLabel("➡️")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  const msg = await interaction.reply({
-    embeds: [generateEmbed(page)],
-    components: [row],
-    fetchReply: true,
-  });
-
-  const collector = msg.createMessageComponentCollector({
-    time: 60000,
-  });
-
-  collector.on("collect", async (i) => {
-    if (i.user.id !== interaction.user.id)
-      return i.reply({ content: "Not for you.", ephemeral: true });
-
-    if (i.customId === "lb_prev")
-      page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
-
-    if (i.customId === "lb_next")
-      page = page < Math.ceil(sorted.length / perPage) - 1 ? page + 1 : 0;
-
-    await i.update({ embeds: [generateEmbed(page)] });
-  });
-}
-    if (interaction.commandName === "invites") {
-  const user = interaction.options.getUser("user") || interaction.user;
-  const data = inviteData[user.id];
-
-  if (!data)
-    return interaction.reply({
-      content: "No invites.",
-      ephemeral: true,
-    });
-
-  const embed = new EmbedBuilder()
-    .setTitle("📨 Invite Stats")
-    .setColor("#00ff99")
-    .addFields(
-      { name: "Joins", value: `${data.joins}`, inline: true },
-      { name: "Rejoins", value: `${data.rejoin}`, inline: true }
-    );
-
-  return interaction.reply({ embeds: [embed] });
-}
-    // PAYPAL FEES
-    if (interaction.commandName === "paypal-fees") {
-      const amount = interaction.options.getNumber("amount");
-      const fee = amount * 0.0449 + 0.6;
-      const after = amount - fee;
-      const send = amount + fee;
+      const total = data.joins + data.rejoin;
 
       const embed = new EmbedBuilder()
-        .setColor("#009cde")
-        .setTitle("PayPal Fee Calculator")
+        .setColor("#00ff99")
+        .setTitle("📨 Invite Stats")
         .addFields(
-          { name: "💰 Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
-          { name: "📊 Fee", value: `$${fee.toFixed(2)}`, inline: true },
-          { name: "📉 After Fee", value: `$${after.toFixed(2)}`, inline: true },
-          { name: "📤 You Send", value: `$${send.toFixed(2)}`, inline: true }
-        )
-        .setFooter({ text: "PayPal Calculator" });
+          { name: "Joins", value: `${data.joins}`, inline: true },
+          { name: "Rejoins", value: `${data.rejoin}`, inline: true },
+          { name: "Total", value: `${total}`, inline: true }
+        );
 
       return interaction.reply({ embeds: [embed] });
     }
 
-    if (interaction.commandName === "paypal") return interaction.reply(PAYPAL_INFO);
-    if (interaction.commandName === "binance") return interaction.reply(BINANCE_INFO);
-    if (interaction.commandName === "payment-methods")
-      return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
+    // RESET INVITES (يصفّر الليدر بورد)
+    if (interaction.commandName === "resetinvites") {
+      inviteData = {};
+      saveInvites();
+
+      return interaction.reply("✅ All invites reset. Leaderboard is now 0.");
+    }
+
+    // LEADERBOARD (يعتمد على البيانات المخزنة فقط)
+    if (interaction.commandName === "leaderboard") {
+
+      const sorted = Object.entries(inviteData)
+        .map(([id, d]) => ({
+          id,
+          total: d.joins + d.rejoin,
+        }))
+        .sort((a, b) => b.total - a.total);
+
+      if (!sorted.length)
+        return interaction.reply("No invite data yet.");
+
+      const perPage = 10;
+      let page = 0;
+
+      function embed(page) {
+        const start = page * perPage;
+        const users = sorted.slice(start, start + perPage);
+
+        return new EmbedBuilder()
+          .setTitle("🏆 Invite Leaderboard")
+          .setColor("#FFD700")
+          .setDescription(
+            users
+              .map((u, i) =>
+                `${start + i + 1}. <@${u.id}> — **${u.total}**`
+              )
+              .join("\n")
+          )
+          .setFooter({
+            text: `Page ${page + 1}/${Math.ceil(sorted.length / perPage)}`,
+          });
+      }
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("lb_prev")
+          .setLabel("⬅️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("lb_next")
+          .setLabel("➡️")
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      const msg = await interaction.reply({
+        embeds: [embed(page)],
+        components: [row],
+        fetchReply: true,
+      });
+
+      const collector = msg.createMessageComponentCollector({
+        time: 60000,
+      });
+
+      collector.on("collect", async (i) => {
+        if (i.user.id !== interaction.user.id)
+          return i.reply({ content: "Not for you.", ephemeral: true });
+
+        if (i.customId === "lb_prev")
+          page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
+
+        if (i.customId === "lb_next")
+          page = page < Math.ceil(sorted.length / perPage) - 1 ? page + 1 : 0;
+
+        await i.update({ embeds: [embed(page)] });
+      });
+    }
+
+    // PAYMENTS
+    if (interaction.commandName === "paypal")
+      return interaction.reply(PAYPAL_INFO);
+
+    if (interaction.commandName === "binance")
+      return interaction.reply(BINANCE_INFO);
+
+    if (interaction.commandName === "paypal-fees") {
+      const amount = interaction.options.getNumber("amount");
+      const fee = amount * 0.0449 + 0.6;
+
+      const embed = new EmbedBuilder()
+        .setColor("#009cde")
+        .setTitle("PayPal Fee")
+        .addFields(
+          { name: "Amount", value: `$${amount.toFixed(2)}` },
+          { name: "Fee", value: `$${fee.toFixed(2)}` }
+        );
+
+      return interaction.reply({ embeds: [embed] });
+    }
 
     // TICKET PANEL
     if (interaction.commandName === "ticketpanel") {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-        return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
+
       const embed = new EmbedBuilder()
         .setTitle("🎫 Ticket System")
         .setDescription("Choose ticket type")
         .setColor("Blue");
+
       const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_purchase")
           .setLabel("Purchase")
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji("🛒"),
+          .setEmoji("🛒")
+          .setStyle(ButtonStyle.Primary),
+
         new ButtonBuilder()
           .setCustomId("ticket_seller")
-          .setLabel("Seller Application")
-          .setStyle(ButtonStyle.Success)
-          .setEmoji("📦"),
+          .setLabel("Seller")
+          .setEmoji("📦")
+          .setStyle(ButtonStyle.Success),
+
         new ButtonBuilder()
           .setCustomId("ticket_report")
-          .setLabel("Report Scammer")
-          .setStyle(ButtonStyle.Danger)
+          .setLabel("Report")
           .setEmoji("🚨")
+          .setStyle(ButtonStyle.Danger)
       );
+
       return interaction.reply({ embeds: [embed], components: [buttons] });
     }
 
+    // CLOSE
     if (interaction.commandName === "close") {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.Administrator))
-        return interaction.reply({ content: "❌ Staff only.", ephemeral: true });
-      await interaction.reply({ content: "🔒 Closing ticket...", ephemeral: true });
+      await interaction.reply({ content: "Closing...", ephemeral: true });
       return closeTicket(interaction.channel, interaction.user);
-    }
-
-    // GIVEAWAY
-    if (interaction.commandName === "giveaway") {
-      const sub = interaction.options.getSubcommand();
-
-      if (sub === "start") {
-        const duration = interaction.options.getString("duration");
-        const winners = interaction.options.getInteger("winners");
-        const prize = interaction.options.getString("prize");
-        const endTime = Date.now() + ms(duration);
-
-        const embed = buildGiveawayEmbed(prize, winners, endTime, 0);
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("join_giveaway")
-            .setLabel("Join Giveaway")
-            .setStyle(ButtonStyle.Success)
-        );
-
-        const msg = await interaction.reply({
-          embeds: [embed],
-          components: [row],
-          fetchReply: true,
-        });
-
-        giveaways.set(msg.id, {
-          prize,
-          winners,
-          endTime,
-          users: new Set(),
-          channelId: msg.channel.id,
-        });
-        saveGiveaways();
-        scheduleUpdate(msg.id);
-        setTimeout(() => endGiveaway(msg.id), ms(duration));
-      }
-
-      if (sub === "reroll") return rerollGiveaway(interaction.options.getString("message_id"), interaction);
-      if (sub === "end") {
-        await endGiveaway(interaction.options.getString("message_id"));
-        return interaction.reply({ ephemeral: true, content: "Ended" });
-      }
-    }
-
-    // INVITE LEADERBOARD
-    if (interaction.commandName === "leaderboard") {
-      const guild = await client.guilds.fetch(GUILD_ID);
-      await guild.invites.fetch().then((invites) => {
-        const inviteData = [];
-        invites.each((i) => inviteData.push({ inviter: i.inviter, uses: i.uses || 0 }));
-
-        // Aggregate per user
-        const map = new Map();
-        inviteData.forEach((i) => {
-          if (!i.inviter) return;
-          map.set(i.inviter.id, (map.get(i.inviter.id) || 0) + i.uses);
-        });
-
-        const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
-
-        const pages = [];
-        const perPage = 10;
-        for (let i = 0; i < sorted.length; i += perPage) {
-          const page = sorted.slice(i, i + perPage);
-          const embed = new EmbedBuilder()
-            .setTitle("📊 Invite Leaderboard")
-            .setColor("#FFD700")
-            .setDescription(
-              page.map((x, idx) => `${i + idx + 1}. <@${x[0]}> - **${x[1]}** invites`).join("\n")
-            )
-            .setFooter({ text: `Page ${Math.floor(i / perPage) + 1}/${Math.ceil(sorted.length / perPage) || 1}` });
-          pages.push(embed);
-        }
-
-        let page = 0;
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("prev_page").setLabel("⬅️").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("next_page").setLabel("➡️").setStyle(ButtonStyle.Secondary)
-        );
-
-        interaction.reply({ embeds: [pages[page]], components: [row] }).then((msg) => {
-          const filter = (i) => i.user.id === interaction.user.id;
-          const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
-
-          collector.on("collect", (i) => {
-            if (i.customId === "prev_page") page = page > 0 ? page - 1 : pages.length - 1;
-            if (i.customId === "next_page") page = page < pages.length - 1 ? page + 1 : 0;
-            i.update({ embeds: [pages[page]] });
-          });
-        });
-      });
     }
   }
 
+  /***********************
+   * BUTTONS
+   ***********************/
   if (interaction.isButton()) {
-    // TICKET BUTTONS
+
     if (interaction.customId === "ticket_purchase") {
-      const modal = new ModalBuilder().setCustomId("purchase_modal").setTitle("Purchase");
+      const modal = new ModalBuilder()
+        .setCustomId("purchase_modal")
+        .setTitle("Purchase");
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
@@ -548,59 +398,55 @@ client.on(Events.InteractionCreate, async (interaction) => {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("payment")
-            .setLabel("Payment method")
+            .setLabel("Payment")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         )
       );
+
       return interaction.showModal(modal);
     }
+
     if (interaction.customId === "ticket_seller") {
       const modal = new ModalBuilder()
         .setCustomId("seller_modal")
-        .setTitle("Seller Application");
+        .setTitle("Seller");
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("items")
-            .setLabel("Items & prices")
+            .setLabel("Items")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("proof")
-            .setLabel("Why should we trust you?")
+            .setLabel("Why trust you?")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         )
       );
+
       return interaction.showModal(modal);
     }
+
     if (interaction.customId === "ticket_report")
-      return createTicket(interaction, "Report", ["🚨 Scam report"]);
-
-    // GIVEAWAY BUTTON
-    if (interaction.customId === "join_giveaway") {
-      const g = giveaways.get(interaction.message.id);
-      if (!g) return interaction.reply({ ephemeral: true, content: "Ended" });
-      if (g.users.has(interaction.user.id))
-        return interaction.reply({ ephemeral: true, content: "Already joined" });
-
-      g.users.add(interaction.user.id);
-      const embed = buildGiveawayEmbed(g.prize, g.winners, g.endTime, g.users.size);
-      await interaction.message.edit({ embeds: [embed] });
-      saveGiveaways();
-      return interaction.reply({ ephemeral: true, content: "Joined" });
-    }
+      return createTicket(interaction, "Report", ["🚨 Scam"]);
   }
 
+  /***********************
+   * MODALS
+   ***********************/
   if (interaction.isModalSubmit()) {
+
     if (interaction.customId === "purchase_modal")
       return createTicket(interaction, "Purchase", [
-        `🛒 **Product:** ${interaction.fields.getTextInputValue("product")}`,
-        `💳 **Payment:** ${interaction.fields.getTextInputValue("payment")}`,
+        `🛒 ${interaction.fields.getTextInputValue("product")}`,
+        `💳 ${interaction.fields.getTextInputValue("payment")}`,
       ]);
+
     if (interaction.customId === "seller_modal")
       return createTicket(interaction, "Seller", [
         interaction.fields.getTextInputValue("items"),
@@ -608,82 +454,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       ]);
   }
 });
-
 /***********************
- * CREATE TICKET
- ***********************/
-async function createTicket(interaction, type, details) {
-  const channel = await interaction.guild.channels.create({
-    name: `${type}-${interaction.user.username}`.toLowerCase(),
-    type: ChannelType.GuildText,
-    parent: TICKET_CATEGORY_ID,
-    permissionOverwrites: [
-      { id: interaction.guild.roles.everyone.id, deny: ["ViewChannel"] },
-      { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] },
-      { id: STAFF_ROLE_ID, allow: ["ViewChannel", "SendMessages"] },
-    ],
-  });
-  const embed = new EmbedBuilder()
-    .setTitle(`🎫 ${type}`)
-    .setDescription(details.join("\n\n"))
-    .setColor("Green");
-  const buttons = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("payment_methods")
-      .setLabel("Payment Methods")
-      .setEmoji("💳")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId("close_ticket")
-      .setLabel("Close Ticket")
-      .setStyle(ButtonStyle.Danger)
-  );
-  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed], components: [buttons] });
-  await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
-}
-
-/***********************
- * CLOSE TICKET
- ***********************/
-async function closeTicket(channel, closer) {
-  const messages = await channel.messages.fetch({ limit: 100 });
-  let text = "";
-  messages.reverse().forEach((m) => {
-    text += `[${m.author.tag}] ${m.content}\n`;
-  });
-  const file = `ticket-${channel.id}.txt`;
-  fs.writeFileSync(file, text);
-  const zip = `ticket-${channel.id}.zip`;
-  const output = fs.createWriteStream(zip);
-  const archive = archiver("zip");
-  archive.pipe(output);
-  archive.file(file, { name: file });
-  await archive.finalize();
-
-  const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (log) {
-    log.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("🎫 Ticket Closed")
-          .setDescription(`Closed by ${closer.tag}`)
-          .setColor("Red"),
-      ],
-      files: [zip],
-    });
-  }
-  setTimeout(() => channel.delete().catch(() => {}), 3000);
-}
-
-/***********************
- * GIVEAWAY EMBED
+ * GIVEAWAY SYSTEM
  ***********************/
 function buildGiveawayEmbed(prize, winners, endTime, count) {
   return new EmbedBuilder()
     .setColor("#0d0d0d")
     .setTitle("🎉 DARK GIVEAWAY 🎉")
     .setDescription(
-      `✨ Prize: **${prize}**
+`✨ Prize: **${prize}**
 🏆 Winners: **${winners}**
 👥 Participants: **${count}**
 ⏳ Ends: <t:${Math.floor(endTime / 1000)}:R>
@@ -696,10 +475,18 @@ function scheduleUpdate(id) {
   setInterval(async () => {
     const g = giveaways.get(id);
     if (!g) return;
+
     try {
       const channel = await client.channels.fetch(g.channelId);
       const msg = await channel.messages.fetch(id);
-      const embed = buildGiveawayEmbed(g.prize, g.winners, g.endTime, g.users.size);
+
+      const embed = buildGiveawayEmbed(
+        g.prize,
+        g.winners,
+        g.endTime,
+        g.users.size
+      );
+
       msg.edit({ embeds: [embed] });
     } catch {}
   }, 60000);
@@ -710,47 +497,126 @@ function scheduleUpdate(id) {
  ***********************/
 async function endGiveaway(id) {
   const g = giveaways.get(id);
-  if (!g) return; // لو ما موجود، نوقف التنفيذ
+  if (!g) return;
 
-  const channel = await client.channels.fetch(g.channelId);
-  const msg = await channel.messages.fetch(id);
-  if (!g.users.size) return msg.edit({ content: "No participants", embeds: [], components: [] });
+  try {
+    const channel = await client.channels.fetch(g.channelId);
+    const msg = await channel.messages.fetch(id);
 
-  const entries = [...g.users];
-  const winners = [];
-  while (winners.length < Math.min(g.winners, entries.length)) {
-    const rand = entries[Math.floor(Math.random() * entries.length)];
-    if (!winners.includes(rand)) winners.push(rand);
-  }
+    if (!g.users.size) {
+      await msg.edit({
+        content: "No participants",
+        embeds: [],
+        components: [],
+      });
+      giveaways.delete(id);
+      saveGiveaways();
+      return;
+    }
 
-  const text = winners.map((x) => `<@${x}>`).join(", ");
-  await msg.edit({ content: `🎉 Winners: ${text}`, embeds: [], components: [] });
-  channel.send(`🎉 Congratulations ${text}! You won **${g.prize}**`);
+    const entries = [...g.users];
+    const winners = [];
 
-  for (const id of winners) {
-    const member = await channel.guild.members.fetch(id).catch(() => null);
-    if (member) member.send(`🎉 You won **${g.prize}** in ${channel.guild.name}!`).catch(() => {});
-  }
+    while (winners.length < Math.min(g.winners, entries.length)) {
+      const rand = entries[Math.floor(Math.random() * entries.length)];
+      if (!winners.includes(rand)) winners.push(rand);
+    }
+
+    const text = winners.map((x) => `<@${x}>`).join(", ");
+
+    await msg.edit({
+      content: `🎉 Winners: ${text}`,
+      embeds: [],
+      components: [],
+    });
+
+    channel.send(`🎉 Congratulations ${text}! You won **${g.prize}**`);
+
+    for (const id of winners) {
+      const member = await channel.guild.members
+        .fetch(id)
+        .catch(() => null);
+
+      if (member)
+        member.send(
+          `🎉 You won **${g.prize}** in ${channel.guild.name}!`
+        ).catch(() => {});
+    }
+
+    giveaways.delete(id);
+    saveGiveaways();
+
+  } catch {}
 }
+
 /***********************
- * REROLL GIVEAWAY
+ * REROLL
  ***********************/
 async function rerollGiveaway(id, interaction) {
   const g = giveaways.get(id);
-  if (!g) return interaction.reply({ ephemeral: true, content: "Not found" });
+  if (!g)
+    return interaction.reply({
+      ephemeral: true,
+      content: "Giveaway not found.",
+    });
 
   const entries = [...g.users];
   const winners = [];
+
   while (winners.length < Math.min(g.winners, entries.length)) {
     const rand = entries[Math.floor(Math.random() * entries.length)];
     if (!winners.includes(rand)) winners.push(rand);
   }
-  interaction.reply({ content: `New winners: ${winners.map((x) => `<@${x}>`).join(", ")}` });
+
+  return interaction.reply({
+    content: `🎉 New winners: ${winners
+      .map((x) => `<@${x}>`)
+      .join(", ")}`,
+  });
 }
+
+/***********************
+ * GIVEAWAY BUTTON
+ ***********************/
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  if (interaction.customId === "join_giveaway") {
+    const g = giveaways.get(interaction.message.id);
+
+    if (!g)
+      return interaction.reply({
+        ephemeral: true,
+        content: "This giveaway ended.",
+      });
+
+    if (g.users.has(interaction.user.id))
+      return interaction.reply({
+        ephemeral: true,
+        content: "Already joined.",
+      });
+
+    g.users.add(interaction.user.id);
+
+    const embed = buildGiveawayEmbed(
+      g.prize,
+      g.winners,
+      g.endTime,
+      g.users.size
+    );
+
+    await interaction.message.edit({ embeds: [embed] });
+
+    saveGiveaways();
+
+    return interaction.reply({
+      ephemeral: true,
+      content: "Joined 🎉",
+    });
+  }
+});
 
 /***********************
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
-
-
