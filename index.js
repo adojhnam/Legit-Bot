@@ -92,9 +92,13 @@ async function registerCommands() {
     new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
     new SlashCommandBuilder().setName("payment-methods").setDescription("Methods"),
     new SlashCommandBuilder()
-      .setName("paypal-fees")
-      .setDescription("Fees")
-      .addNumberOption(o => o.setName("amount").setRequired(true)),
+  .setName("paypal-fees")
+  .setDescription("Calculate PayPal fees")
+  .addNumberOption(o =>
+    o.setName("amount")
+     .setDescription("Payment amount")
+     .setRequired(true)
+  ),
     new SlashCommandBuilder()
       .setName("leaderboard")
       .setDescription("Invite leaderboard"),
@@ -259,3 +263,4 @@ async function closeTicket(channel, closer) {
 
 /***********************/
 client.login(process.env.TOKEN);
+
