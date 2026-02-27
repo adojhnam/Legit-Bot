@@ -154,60 +154,91 @@ client.on(Events.InviteDelete, async (invite) => {
  ***********************/
 async function registerCommands() {
   const commands = [
+
     new SlashCommandBuilder()
       .setName("invites")
       .setDescription("Show invite stats")
       .addUserOption((o) =>
         o.setName("user").setDescription("Target user")
-      )
-      .toJSON(),
+      ),
 
     new SlashCommandBuilder()
       .setName("resetinvites")
       .setDescription("Reset ALL invites")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .toJSON(),
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
       .setName("leaderboard")
-      .setDescription("Invite leaderboard")
-      .toJSON(),
+      .setDescription("Invite leaderboard"),
 
     new SlashCommandBuilder()
       .setName("ticketpanel")
       .setDescription("Open ticket panel")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .toJSON(),
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
       .setName("close")
       .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-      .toJSON(),
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     new SlashCommandBuilder()
       .setName("paypal-fees")
       .setDescription("Calculate PayPal fees")
       .addNumberOption((o) =>
         o.setName("amount").setDescription("Amount").setRequired(true)
-      )
-      .toJSON(),
+      ),
 
     new SlashCommandBuilder()
       .setName("paypal")
-      .setDescription("Show PayPal")
-      .toJSON(),
+      .setDescription("Show PayPal"),
 
     new SlashCommandBuilder()
       .setName("binance")
-      .setDescription("Show Binance")
-      .toJSON(),
-  ];
+      .setDescription("Show Binance"),
+
+    new SlashCommandBuilder()
+      .setName("payment-methods")
+      .setDescription("Show all payment methods"),
+
+    new SlashCommandBuilder()
+      .setName("giveaway")
+      .setDescription("Giveaway system")
+      .addSubcommand((s) =>
+        s.setName("start")
+          .setDescription("Start giveaway")
+          .addStringOption((o) =>
+            o.setName("duration").setDescription("10m 1h 1d").setRequired(true)
+          )
+          .addIntegerOption((o) =>
+            o.setName("winners").setDescription("Winners").setRequired(true)
+          )
+          .addStringOption((o) =>
+            o.setName("prize").setDescription("Prize").setRequired(true)
+          )
+      )
+      .addSubcommand((s) =>
+        s.setName("reroll")
+          .setDescription("Reroll")
+          .addStringOption((o) =>
+            o.setName("message_id").setRequired(true)
+          )
+      )
+      .addSubcommand((s) =>
+        s.setName("end")
+          .setDescription("End giveaway")
+          .addStringOption((o) =>
+            o.setName("message_id").setRequired(true)
+          )
+      )
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+  ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
   await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
     body: commands,
   });
+
   console.log("✅ Commands registered");
 }
 /***********************
@@ -324,21 +355,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.commandName === "binance")
       return interaction.reply(BINANCE_INFO);
 
-    if (interaction.commandName === "paypal-fees") {
-      const amount = interaction.options.getNumber("amount");
-      const fee = amount * 0.0449 + 0.6;
+if (interaction.commandName === "paypal-fees") {
+  const amount = interaction.options.getNumber("amount");
 
-      const embed = new EmbedBuilder()
-        .setColor("#009cde")
-        .setTitle("PayPal Fee")
-        .addFields(
-          { name: "Amount", value: `$${amount.toFixed(2)}` },
-          { name: "Fee", value: `$${fee.toFixed(2)}` }
-        );
+  const fee = amount * 0.0449 + 0.6;
+  const after = amount - fee;
+  const send = amount + fee;
 
-      return interaction.reply({ embeds: [embed] });
-    }
+  const embed = new EmbedBuilder()
+    .setColor("#009cde")
+    .setTitle("💰 PayPal Fee Calculator")
+    .addFields(
+      { name: "💵 Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
+      { name: "📊 PayPal Fee", value: `$${fee.toFixed(2)}`, inline: true },
+      { name: "📉 After Fee", value: `$${after.toFixed(2)}`, inline: true },
+      { name: "📤 You Send", value: `$${send.toFixed(2)}`, inline: true }
+    )
+    .setFooter({ text: "Legit Store" });
 
+  return interaction.reply({ embeds: [embed] });
+}
+    if (interaction.commandName === "payment-methods") {
+  return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
+}
+    if (interaction.commandName === "giveaway") {
+  const sub = interaction.options.getSubcommand();
+
+  if (sub === "start") {
+    const duration = interaction.options.getString("duration");
+    const winners = interaction.options.getInteger("winners");
+    const prize = interaction.options.getString("prize");
+
+    const endTime = Date.now() + ms(duration);
+
+    const embed = buildGiveawayEmbed(prize, winners, endTime, 0);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("join_giveaway")
+        .setLabel("Join Giveaway")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const msg = await interaction.reply({
+      embeds: [embed],
+      components: [row],
+      fetchReply: true,
+    });
+
+    giveaways.set(msg.id, {
+      prize,
+      winners,
+      endTime,
+      users: new Set(),
+      channelId: msg.channel.id,
+    });
+
+    saveGiveaways();
+    scheduleUpdate(msg.id);
+    setTimeout(() => endGiveaway(msg.id), ms(duration));
+  }
+
+  if (sub === "reroll")
+    return rerollGiveaway(
+      interaction.options.getString("message_id"),
+      interaction
+    );
+
+  if (sub === "end") {
+    await endGiveaway(interaction.options.getString("message_id"));
+    return interaction.reply({ content: "Ended", ephemeral: true });
+  }
+}
     // TICKET PANEL
     if (interaction.commandName === "ticketpanel") {
 
@@ -620,3 +707,4 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
