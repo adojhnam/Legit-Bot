@@ -169,10 +169,8 @@ async function registerCommands() {
 
 new SlashCommandBuilder()
   .setName("resetinvites")
-  .setDescription("Reset user invites")
-  .addUserOption(o =>
-    o.setName("user").setDescription("Target user").setRequired(true)
-  )
+  .setDescription("Reset ALL invites")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
 new SlashCommandBuilder()
@@ -283,21 +281,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   return interaction.reply({ embeds: [embed] });
 }
-    if (interaction.commandName === "resetinvites") {
-  const user = interaction.options.getUser("user");
+   if (interaction.commandName === "resetinvites") {
 
-  if (!inviteData[user.id]) {
-    return interaction.reply({
-      content: "User has no invite data.",
-      ephemeral: true,
-    });
-  }
-
-  delete inviteData[user.id];
+  inviteData = {}; // تصفير الجميع
   saveInvites();
 
   return interaction.reply({
-    content: `✅ Invite data reset for ${user.tag}`,
+    content: "✅ All invite data has been reset.",
   });
 }
     if (interaction.commandName === "leaderboard") {
@@ -762,4 +752,5 @@ async function rerollGiveaway(id, interaction) {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
