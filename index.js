@@ -547,12 +547,12 @@ if (interaction.commandName === "paypal-fees") {
 function buildGiveawayEmbed(prize, winners, endTime, count) {
   return new EmbedBuilder()
     .setColor("#0d0d0d")
-    .setTitle("<1454881610724937845> Legit GIVEAWAY <1454881610724937845>")
+    .setTitle("<:Giveaway:1454881610724937845> Legit GIVEAWAY <:Giveaway:1454881610724937845>")
     .setDescription(
-`<1438809324611698688> Prize: **${prize}**
+`<:Giveaway:1438809324611698688> Prize: **${prize}**
 🏆 Winners: **${winners}**
 👥 Participants: **${count}**
-<1477044105736618178> Ends: <t:${Math.floor(endTime / 1000)}:R>
+<:time:1477044105736618178> Ends: <t:${Math.floor(endTime / 1000)}:R>
 
 🔥 Click the button below to enter!`
     );
@@ -707,6 +707,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
