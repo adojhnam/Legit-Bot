@@ -1,5 +1,5 @@
 // ======================================
-// Legit Bot - FULL MERGED VERSION
+// Legit Bot - Optimized + Fixed
 // ======================================
 
 require("dotenv").config();
@@ -25,19 +25,20 @@ const {
   PermissionFlagsBits,
 } = require("discord.js");
 
+process.on("unhandledRejection", console.error);
+process.on("uncaughtException", console.error);
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
   ],
 });
 
-
-// =====================
-// CONFIG
-// =====================
+/***********************
+ CONFIG
+************************/
 const TICKET_CATEGORY_ID = "1414954122918236171";
 const LOG_CHANNEL_ID = "1470080063792742410";
 const GUILD_ID = "1412911390494036072";
@@ -46,10 +47,9 @@ const STAFF_ROLE_ID = "1414301511579598858";
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
-
-// =====================
-// GIVEAWAYS
-// =====================
+/***********************
+ GIVEAWAYS
+************************/
 const DATA_FILE = "giveaways.json";
 let giveaways = new Map();
 if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "{}");
@@ -67,274 +67,195 @@ function loadGiveaways() {
     const g = data[id];
     g.users = new Set(g.users);
     giveaways.set(id, g);
-    scheduleUpdate(id);
     const timeLeft = g.endTime - Date.now();
     if (timeLeft > 0) setTimeout(() => endGiveaway(id), timeLeft);
   }
 }
 
-
-// =====================
-// INVITES + REJOIN (JSON)
-// =====================
-const INVITE_FILE = "invites.json";
-let inviteData = {};
-
-if (!fs.existsSync(INVITE_FILE)) fs.writeFileSync(INVITE_FILE, "{}");
-inviteData = JSON.parse(fs.readFileSync(INVITE_FILE));
-
-function saveInvites() {
-  fs.writeFileSync(INVITE_FILE, JSON.stringify(inviteData, null, 2));
-}
-
-
-// cache
-let inviteCache = new Map();
-
-client.on(Events.ClientReady, async () => {
+/***********************
+ READY
+************************/
+client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-
-  const guild = await client.guilds.fetch(GUILD_ID);
-  const invites = await guild.invites.fetch();
-  inviteCache.set(GUILD_ID, new Map(invites.map(i => [i.code, i.uses])));
-
   await registerCommands();
   loadGiveaways();
 });
 
-
-// detect join
-client.on(Events.GuildMemberAdd, async member => {
-  const guild = member.guild;
-
-  const newInvites = await guild.invites.fetch();
-  const oldInvites = inviteCache.get(guild.id);
-
-  const used = newInvites.find(i => oldInvites.get(i.code) < i.uses);
-
-  inviteCache.set(guild.id, new Map(newInvites.map(i => [i.code, i.uses])));
-
-  if (!inviteData[guild.id]) inviteData[guild.id] = {};
-  const g = inviteData[guild.id];
-
-  // rejoin
-  if (g[member.id] && g[member.id].left) {
-    g[member.id].rejoin++;
-    g[member.id].left = false;
-    saveInvites();
-    return;
-  }
-
-  if (used && used.inviter) {
-    const id = used.inviter.id;
-    if (!g[id]) g[id] = { regular: 0, rejoin: 0, left: false };
-    g[id].regular++;
-    saveInvites();
-  }
-});
-
-
-// detect leave
-client.on(Events.GuildMemberRemove, member => {
-  const guildId = member.guild.id;
-  if (!inviteData[guildId]) inviteData[guildId] = {};
-  if (!inviteData[guildId][member.id])
-    inviteData[guildId][member.id] = { regular: 0, rejoin: 0 };
-
-  inviteData[guildId][member.id].left = true;
-  saveInvites();
-});
-// =====================
-// COMMANDS
-// =====================
+/***********************
+ COMMANDS
+************************/
 async function registerCommands() {
   const commands = [
-
-    new SlashCommandBuilder()
-      .setName("ticketpanel")
-      .setDescription("Send the ticket panel"),
-
-    new SlashCommandBuilder()
-      .setName("close")
-      .setDescription("Close the current ticket"),
-
-    new SlashCommandBuilder()
-      .setName("paypal")
-      .setDescription("Show PayPal payment information"),
-
-    new SlashCommandBuilder()
-      .setName("binance")
-      .setDescription("Show Binance payment information"),
-
-    new SlashCommandBuilder()
-      .setName("payment-methods")
-      .setDescription("Show all available payment methods"),
-
+    new SlashCommandBuilder().setName("ticketpanel").setDescription("Open ticket panel"),
+    new SlashCommandBuilder().setName("close").setDescription("Close ticket"),
+    new SlashCommandBuilder().setName("paypal").setDescription("Show PayPal"),
+    new SlashCommandBuilder().setName("binance").setDescription("Show Binance"),
+    new SlashCommandBuilder().setName("payment-methods").setDescription("Methods"),
     new SlashCommandBuilder()
       .setName("paypal-fees")
-      .setDescription("Calculate PayPal fees")
-      .addNumberOption(o =>
-        o.setName("amount")
-          .setDescription("Payment amount")
-          .setRequired(true)
-      ),
-
-    new SlashCommandBuilder()
-      .setName("giveaway")
-      .setDescription("Giveaway management")
-      .addSubcommand(s =>
-        s.setName("start")
-          .setDescription("Start a giveaway")
-          .addStringOption(o =>
-            o.setName("duration")
-              .setDescription("Duration (e.g. 10m, 1h)")
-              .setRequired(true))
-          .addIntegerOption(o =>
-            o.setName("winners")
-              .setDescription("Number of winners")
-              .setRequired(true))
-          .addStringOption(o =>
-            o.setName("prize")
-              .setDescription("Giveaway prize")
-              .setRequired(true)))
-      .addSubcommand(s =>
-        s.setName("reroll")
-          .setDescription("Reroll a giveaway")
-          .addStringOption(o =>
-            o.setName("message_id")
-              .setDescription("Giveaway message ID")
-              .setRequired(true)))
-      .addSubcommand(s =>
-        s.setName("end")
-          .setDescription("End a giveaway")
-          .addStringOption(o =>
-            o.setName("message_id")
-              .setDescription("Giveaway message ID")
-              .setRequired(true))),
-
+      .setDescription("Fees")
+      .addNumberOption(o => o.setName("amount").setRequired(true)),
     new SlashCommandBuilder()
       .setName("leaderboard")
-      .setDescription("Show invites leaderboard"),
-
-    new SlashCommandBuilder()
-      .setName("invites")
-      .setDescription("Check a user's invites")
-      .addUserOption(o =>
-        o.setName("user")
-          .setDescription("The user to check")
-          .setRequired(true)
-      ),
-
-    new SlashCommandBuilder()
-      .setName("reset-invites")
-      .setDescription("Reset all invites data for the guild"),
-
+      .setDescription("Invite leaderboard"),
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  await rest.put(
-    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
-    { body: commands }
-  );
+  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
+    body: commands,
+  });
 }
 
-// =====================
-// INTERACTIONS
-// =====================
+/***********************
+ GLOBAL INTERACTION FIX
+************************/
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+  try {
+    if (interaction.isChatInputCommand()) {
 
-  const guildId = interaction.guildId;
+      // ⭐ GLOBAL FIX
+      if (!interaction.deferred && !interaction.replied)
+        await interaction.deferReply();
 
-  // invites user
-  if (interaction.commandName === "invites") {
-    const user = interaction.options.getUser("user");
-    const data = inviteData[guildId]?.[user.id] || { regular: 0, rejoin: 0 };
+      /******** PAYMENTS ********/
+      if (interaction.commandName === "paypal")
+        return interaction.editReply(PAYPAL_INFO);
 
-    return interaction.reply({
-      content:
-        `📊 **${user.tag}**\nRegular: ${data.regular}\nRejoin: ${data.rejoin}`,
-      ephemeral: true
-    });
-  }
+      if (interaction.commandName === "binance")
+        return interaction.editReply(BINANCE_INFO);
 
-  // reset
-  if (interaction.commandName === "reset-invites") {
-    inviteData[guildId] = {};
-    saveInvites();
-    return interaction.reply({ content: "Done", ephemeral: true });
-  }
+      if (interaction.commandName === "payment-methods")
+        return interaction.editReply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
 
-  // leaderboard (بدون rejoin)
-  if (interaction.commandName === "leaderboard") {
-    const g = inviteData[guildId] || {};
+      if (interaction.commandName === "paypal-fees") {
+        const amount = interaction.options.getNumber("amount");
+        const fee = amount * 0.0449 + 0.6;
+        return interaction.editReply(`Fee: ${fee.toFixed(2)}`);
+      }
 
-    const sorted = Object.entries(g)
-      .sort((a, b) => b[1].regular - a[1].regular);
+      /******** TICKET PANEL ********/
+      if (interaction.commandName === "ticketpanel") {
+        const embed = new EmbedBuilder()
+          .setTitle("🎫 Ticket System")
+          .setDescription("Choose ticket type");
 
-    const desc = sorted
-      .slice(0, 10)
-      .map((x, i) => `${i + 1}. <@${x[0]}> - ${x[1].regular}`)
-      .join("\n") || "No data";
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("ticket_purchase")
+            .setLabel("Purchase")
+            .setStyle(ButtonStyle.Primary)
+        );
 
-    return interaction.reply({
-      embeds: [new EmbedBuilder().setTitle("Leaderboard").setDescription(desc)]
-    });
+        return interaction.editReply({ embeds: [embed], components: [row] });
+      }
+
+      if (interaction.commandName === "close")
+        return closeTicket(interaction.channel, interaction.user);
+
+      /******** LEADERBOARD ********/
+      if (interaction.commandName === "leaderboard") {
+        const guild = await client.guilds.fetch(GUILD_ID);
+        const invites = await guild.invites.fetch();
+
+        const sorted = invites
+          .map(i => ({ id: i.inviter?.id, uses: i.uses || 0 }))
+          .filter(x => x.id)
+          .sort((a, b) => b.uses - a.uses)
+          .slice(0, 10);
+
+        const desc = sorted
+          .map((x, i) => `${i + 1}. <@${x.id}> - ${x.uses}`)
+          .join("\n") || "No data";
+
+        return interaction.editReply({
+          embeds: [new EmbedBuilder().setTitle("Leaderboard").setDescription(desc)],
+        });
+      }
+    }
+
+    /******** BUTTONS ********/
+    if (interaction.isButton()) {
+
+      if (interaction.customId === "ticket_purchase")
+        return createTicket(interaction, "Purchase", []);
+
+      if (interaction.customId === "join_giveaway") {
+        const g = giveaways.get(interaction.message.id);
+        if (!g)
+          return interaction.reply({ ephemeral: true, content: "Ended" });
+
+        if (g.users.has(interaction.user.id))
+          return interaction.reply({ ephemeral: true, content: "Already joined" });
+
+        g.users.add(interaction.user.id);
+        saveGiveaways();
+        return interaction.reply({ ephemeral: true, content: "Joined" });
+      }
+    }
+
+  } catch (err) {
+    console.error(err);
+    if (!interaction.replied)
+      interaction.reply({ content: "Error", ephemeral: true });
   }
 });
 
+/***********************
+ ANTI SPAM + LIMIT
+************************/
+const openTickets = new Map();
 
-// =====================
-// GIVEAWAY SYSTEM
-// =====================
-function buildGiveawayEmbed(prize, winners, endTime, count) {
-  return new EmbedBuilder()
-    .setTitle("🎉 Giveaway")
-    .setDescription(
-      `Prize: **${prize}**
-Winners: **${winners}**
-Participants: **${count}**
-Ends: <t:${Math.floor(endTime / 1000)}:R>`
-    );
+async function createTicket(interaction, type, details) {
+
+  if (openTickets.has(interaction.user.id))
+    return interaction.reply({ ephemeral: true, content: "You already have a ticket." });
+
+  openTickets.set(interaction.user.id, true);
+
+  const channel = await interaction.guild.channels.create({
+    name: `${type}-${interaction.user.username}`,
+    type: ChannelType.GuildText,
+    parent: TICKET_CATEGORY_ID,
+    permissionOverwrites: [
+      { id: interaction.guild.roles.everyone.id, deny: ["ViewChannel"] },
+      { id: interaction.user.id, allow: ["ViewChannel", "SendMessages"] },
+      { id: STAFF_ROLE_ID, allow: ["ViewChannel", "SendMessages"] },
+    ],
+  });
+
+  await channel.send(`<@${interaction.user.id}>`);
+  interaction.reply({ ephemeral: true, content: `Ticket: ${channel}` });
 }
 
-function scheduleUpdate(id) {
-  setInterval(async () => {
-    const g = giveaways.get(id);
-    if (!g) return;
-    const ch = await client.channels.fetch(g.channelId);
-    const msg = await ch.messages.fetch(id);
-    msg.edit({ embeds: [buildGiveawayEmbed(g.prize, g.winners, g.endTime, g.users.size)] });
-  }, 60000);
+/***********************
+ CLOSE TICKET
+************************/
+async function closeTicket(channel, closer) {
+  try {
+    const messages = await channel.messages.fetch({ limit: 100 });
+
+    let text = "";
+    messages.reverse().forEach(m => {
+      text += `[${m.author.tag}] ${m.content}\n`;
+    });
+
+    const file = `ticket-${channel.id}.txt`;
+    fs.writeFileSync(file, text);
+
+    const log = channel.guild.channels.cache.get(LOG_CHANNEL_ID);
+    if (log)
+      log.send({
+        embeds: [new EmbedBuilder().setTitle("Ticket closed").setDescription(closer.tag)],
+        files: [file],
+      });
+
+    openTickets.delete(channel.topic);
+    setTimeout(() => channel.delete().catch(() => {}), 3000);
+
+  } catch (err) {
+    console.error(err);
+  }
 }
 
-async function endGiveaway(id) {
-  const g = giveaways.get(id);
-  if (!g) return;
-
-  const channel = await client.channels.fetch(g.channelId);
-  const msg = await channel.messages.fetch(id);
-
-  if (!g.users.size)
-    return msg.edit({ content: "No participants", embeds: [], components: [] });
-
-  const arr = [...g.users];
-  const win = arr[Math.floor(Math.random() * arr.length)];
-
-  msg.edit({ content: `Winner: <@${win}>`, embeds: [], components: [] });
-}
-
-
-// =====================
-// LOGIN
-// =====================
+/***********************/
 client.login(process.env.TOKEN);
-
-
-
-
-
-
-
-
-
