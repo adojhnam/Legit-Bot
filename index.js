@@ -144,51 +144,99 @@ client.on(Events.GuildMemberRemove, member => {
   inviteData[guildId][member.id].left = true;
   saveInvites();
 });
-
-
 // =====================
 // COMMANDS
 // =====================
 async function registerCommands() {
   const commands = [
 
-    new SlashCommandBuilder().setName("ticketpanel").setDescription("Ticket panel"),
-    new SlashCommandBuilder().setName("close").setDescription("Close ticket"),
+    new SlashCommandBuilder()
+      .setName("ticketpanel")
+      .setDescription("Send the ticket panel"),
 
-    new SlashCommandBuilder().setName("paypal"),
-    new SlashCommandBuilder().setName("binance"),
-    new SlashCommandBuilder().setName("payment-methods"),
+    new SlashCommandBuilder()
+      .setName("close")
+      .setDescription("Close the current ticket"),
+
+    new SlashCommandBuilder()
+      .setName("paypal")
+      .setDescription("Show PayPal payment information"),
+
+    new SlashCommandBuilder()
+      .setName("binance")
+      .setDescription("Show Binance payment information"),
+
+    new SlashCommandBuilder()
+      .setName("payment-methods")
+      .setDescription("Show all available payment methods"),
 
     new SlashCommandBuilder()
       .setName("paypal-fees")
-      .addNumberOption(o => o.setName("amount").setRequired(true)),
+      .setDescription("Calculate PayPal fees")
+      .addNumberOption(o =>
+        o.setName("amount")
+          .setDescription("Payment amount")
+          .setRequired(true)
+      ),
 
     new SlashCommandBuilder()
       .setName("giveaway")
+      .setDescription("Giveaway management")
       .addSubcommand(s =>
         s.setName("start")
-          .addStringOption(o => o.setName("duration").setRequired(true))
-          .addIntegerOption(o => o.setName("winners").setRequired(true))
-          .addStringOption(o => o.setName("prize").setRequired(true)))
+          .setDescription("Start a giveaway")
+          .addStringOption(o =>
+            o.setName("duration")
+              .setDescription("Duration (e.g. 10m, 1h)")
+              .setRequired(true))
+          .addIntegerOption(o =>
+            o.setName("winners")
+              .setDescription("Number of winners")
+              .setRequired(true))
+          .addStringOption(o =>
+            o.setName("prize")
+              .setDescription("Giveaway prize")
+              .setRequired(true)))
       .addSubcommand(s =>
-        s.setName("reroll").addStringOption(o => o.setName("message_id").setRequired(true)))
+        s.setName("reroll")
+          .setDescription("Reroll a giveaway")
+          .addStringOption(o =>
+            o.setName("message_id")
+              .setDescription("Giveaway message ID")
+              .setRequired(true)))
       .addSubcommand(s =>
-        s.setName("end").addStringOption(o => o.setName("message_id").setRequired(true))),
+        s.setName("end")
+          .setDescription("End a giveaway")
+          .addStringOption(o =>
+            o.setName("message_id")
+              .setDescription("Giveaway message ID")
+              .setRequired(true))),
 
-    new SlashCommandBuilder().setName("leaderboard"),
+    new SlashCommandBuilder()
+      .setName("leaderboard")
+      .setDescription("Show invites leaderboard"),
 
     new SlashCommandBuilder()
       .setName("invites")
-      .addUserOption(o => o.setName("user").setRequired(true)),
+      .setDescription("Check a user's invites")
+      .addUserOption(o =>
+        o.setName("user")
+          .setDescription("The user to check")
+          .setRequired(true)
+      ),
 
-    new SlashCommandBuilder().setName("reset-invites"),
+    new SlashCommandBuilder()
+      .setName("reset-invites")
+      .setDescription("Reset all invites data for the guild"),
 
   ].map(c => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
+  await rest.put(
+    Routes.applicationGuildCommands(client.user.id, GUILD_ID),
+    { body: commands }
+  );
 }
-
 
 // =====================
 // INTERACTIONS
@@ -281,6 +329,7 @@ async function endGiveaway(id) {
 // LOGIN
 // =====================
 client.login(process.env.TOKEN);
+
 
 
 
