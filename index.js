@@ -316,11 +316,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("lb_prev")
-          .setLabel("<1438799356475215912>")
+          .setLabel("1438799356475215912")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("lb_next")
-          .setLabel("<1438799331938275459>")
+          .setLabel("1438799331938275459")
           .setStyle(ButtonStyle.Secondary)
       );
 
@@ -336,7 +336,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       collector.on("collect", async (i) => {
         if (i.user.id !== interaction.user.id)
-          return i.reply({ content: "Not for you <:weapon~1:1438807813785915422>.", ephemeral: true });
+          return i.reply({ content: "Not for you <:attack:1438807813785915422>.", ephemeral: true });
 
         if (i.customId === "lb_prev")
           page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
@@ -393,6 +393,7 @@ if (interaction.commandName === "paypal-fees") {
       new ButtonBuilder()
         .setCustomId("join_giveaway")
         .setLabel("Join Giveaway")
+        .setEmoji("1454881610724937845")
         .setStyle(ButtonStyle.Success)
     );
 
@@ -547,7 +548,7 @@ if (interaction.commandName === "paypal-fees") {
 function buildGiveawayEmbed(prize, winners, endTime, count) {
   return new EmbedBuilder()
     .setColor("#0d0d0d")
-    .setTitle("<:Giveaway~1:1454881610724937845> Legit GIVEAWAY <:Giveaway~1:1454881610724937845>")
+    .setTitle("<:Giveaway1:1454881610724937845> Legit GIVEAWAY <:Giveaway1:1454881610724937845>")
     .setDescription(
 `<:Giveaway:1438809324611698688> Prize: **${prize}**
 🏆 Winners: **${winners}**
@@ -612,12 +613,12 @@ async function endGiveaway(id) {
     const text = winners.map((x) => `<@${x}>`).join(", ");
 
     await msg.edit({
-      content: `<:giveaway~1:1454881610724937845> Winners: ${text}`,
+      content: `<:giveaway1:1454881610724937845> Winners: ${text}`,
       embeds: [],
       components: [],
     });
 
-    channel.send(`<:giveaway~1:1454881610724937845> Congratulations ${text}! You won **${g.prize}**`);
+    channel.send(`<:giveaway1:1454881610724937845> Congratulations ${text}! You won **${g.prize}**`);
 
     for (const id of winners) {
       const member = await channel.guild.members
@@ -626,7 +627,7 @@ async function endGiveaway(id) {
 
       if (member)
         member.send(
-          `<:giveaway~1:1454881610724937845> You won **${g.prize}** in ${channel.guild.name}!`
+          `<:giveaway1:1454881610724937845> You won **${g.prize}** in ${channel.guild.name}!`
         ).catch(() => {});
     }
 
@@ -656,7 +657,7 @@ async function rerollGiveaway(id, interaction) {
   }
 
   return interaction.reply({
-    content: `<:giveaway~1:1454881610724937845> New winners: ${winners
+    content: `<:giveaway1:1454881610724937845> New winners: ${winners
       .map((x) => `<@${x}>`)
       .join(", ")}`,
   });
@@ -707,6 +708,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
