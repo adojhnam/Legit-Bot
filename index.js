@@ -313,18 +313,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
       }
 
-      const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-  .setCustomId("lb_prev")
-  .setLabel("Last")
-  .setEmoji("1438799356475215912")
-  .setStyle(ButtonStyle.Secondary);
+const row = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId("lb_prev")
+    .setLabel("Last")
+    .setEmoji("1438799356475215912")
+    .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-  .setCustomId("lb_next")
-  .setLabel("Next")
-  .setEmoji("1438799331938275459")
-  .setStyle(ButtonStyle.Secondary);
+  new ButtonBuilder()
+    .setCustomId("lb_next")
+    .setLabel("Next")
+    .setEmoji("1438799331938275459")
+    .setStyle(ButtonStyle.Secondary)
+);
       const msg = await interaction.reply({
         embeds: [embed(page)],
         components: [row],
@@ -709,6 +710,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
