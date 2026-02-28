@@ -217,19 +217,25 @@ async function registerCommands() {
           )
       )
       .addSubcommand((s) =>
-        s.setName("reroll")
-          .setDescription("Reroll")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true)
-          )
-      )
-      .addSubcommand((s) =>
-        s.setName("end")
-          .setDescription("End giveaway")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true)
-          )
-      )
+  s.setName("reroll")
+    .setDescription("Reroll")
+    .addStringOption((o) =>
+      o
+        .setName("message_id")
+        .setDescription("Giveaway message ID")
+        .setRequired(true)
+    )
+)
+.addSubcommand((s) =>
+  s.setName("end")
+    .setDescription("End giveaway")
+    .addStringOption((o) =>
+      o
+        .setName("message_id")
+        .setDescription("Giveaway message ID")
+        .setRequired(true)
+    )
+)
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   ].map(c => c.toJSON());
@@ -710,6 +716,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
