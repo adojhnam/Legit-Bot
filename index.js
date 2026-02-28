@@ -486,7 +486,7 @@ if (interaction.commandName === "paypal-fees") {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("payment")
-            .setLabel("<:hmm:1430877185513881601> What will you pay with ?")
+            .setLabel(":hmm: What will you pay with ?")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         )
@@ -708,6 +708,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
