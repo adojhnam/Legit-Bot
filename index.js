@@ -316,11 +316,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("lb_prev")
-          .setLabel("<:arrow:1438799356475215912>")
+          .setLabel("last")
+          .setEmoji("1438799356475215912")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId("lb_next")
-          .setLabel("<:arrow1:1438799331938275459>")
+          .setLabel("next")
+          .setEmoji("1438799331938275459")
           .setStyle(ButtonStyle.Secondary)
       );
 
@@ -708,6 +710,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
