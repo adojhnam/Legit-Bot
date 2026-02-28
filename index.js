@@ -393,7 +393,7 @@ if (interaction.commandName === "paypal-fees") {
       new ButtonBuilder()
         .setCustomId("join_giveaway")
         .setLabel("Join Giveaway")
-        .setEmoji ("<1454881610724937845:>")
+        .setEmoji ("<1454881610724937845>")
         .setStyle(ButtonStyle.Success)
     );
 
@@ -708,6 +708,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
