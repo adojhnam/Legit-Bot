@@ -486,7 +486,7 @@ if (interaction.commandName === "paypal-fees") {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("payment")
-            .setLabel(":hmm: What will you pay with ?")
+            .setLabel("What will you pay with ?")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         )
@@ -548,7 +548,7 @@ if (interaction.commandName === "paypal-fees") {
 function buildGiveawayEmbed(prize, winners, endTime, count) {
   return new EmbedBuilder()
     .setColor("#0d0d0d")
-    .setTitle("<:Giveaway1:1454881610724937845> Legit GIVEAWAY <:Giveaway1:1454881610724937845>")
+    .setTitle("<a:Giveaway1:1454881610724937845> Legit GIVEAWAY <a:Giveaway1:1454881610724937845>")
     .setDescription(
 `<:Giveaway:1438809324611698688> Prize: **${prize}**
 🏆 Winners: **${winners}**
@@ -613,12 +613,12 @@ async function endGiveaway(id) {
     const text = winners.map((x) => `<@${x}>`).join(", ");
 
     await msg.edit({
-      content: `<:giveaway1:1454881610724937845> Winners: ${text}`,
+      content: `<a:giveaway1:1454881610724937845> Winners: ${text}`,
       embeds: [],
       components: [],
     });
 
-    channel.send(`<:giveaway1:1454881610724937845> Congratulations ${text}! You won **${g.prize}**`);
+    channel.send(`<a:giveaway1:1454881610724937845> Congratulations ${text}! You won **${g.prize}**`);
 
     for (const id of winners) {
       const member = await channel.guild.members
@@ -627,7 +627,7 @@ async function endGiveaway(id) {
 
       if (member)
         member.send(
-          `<:giveaway1:1454881610724937845> You won **${g.prize}** in ${channel.guild.name}!`
+          `<a:giveaway1:1454881610724937845> You won **${g.prize}** in ${channel.guild.name}!`
         ).catch(() => {});
     }
 
@@ -657,7 +657,7 @@ async function rerollGiveaway(id, interaction) {
   }
 
   return interaction.reply({
-    content: `<:giveaway1:1454881610724937845> New winners: ${winners
+    content: `<a:giveaway1:1454881610724937845> New winners: ${winners
       .map((x) => `<@${x}>`)
       .join(", ")}`,
   });
@@ -708,6 +708,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
