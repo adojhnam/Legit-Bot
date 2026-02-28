@@ -318,7 +318,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   .setCustomId("lb_prev")
   .setLabel("Last")
   .setEmoji("1438799356475215912")
-  .setStyle(ButtonStyle.Secondary),
+  .setStyle(ButtonStyle.Secondary);
 
 new ButtonBuilder()
   .setCustomId("lb_next")
@@ -709,6 +709,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
+
 
 
 
