@@ -217,25 +217,19 @@ async function registerCommands() {
           )
       )
       .addSubcommand((s) =>
-  s.setName("reroll")
-    .setDescription("Reroll")
-    .addStringOption((o) =>
-      o
-        .setName("message_id")
-        .setDescription("Giveaway message ID")
-        .setRequired(true)
-    )
-)
-.addSubcommand((s) =>
-  s.setName("end")
-    .setDescription("End giveaway")
-    .addStringOption((o) =>
-      o
-        .setName("message_id")
-        .setDescription("Giveaway message ID")
-        .setRequired(true)
-    )
-)
+        s.setName("reroll")
+          .setDescription("Reroll")
+          .addStringOption((o) =>
+            o.setName("message_id").setRequired(true)
+          )
+      )
+      .addSubcommand((s) =>
+        s.setName("end")
+          .setDescription("End giveaway")
+          .addStringOption((o) =>
+            o.setName("message_id").setRequired(true)
+          )
+      )
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   ].map(c => c.toJSON());
@@ -260,7 +254,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const data = inviteData[user.id];
 
       if (!data)
-        return interaction.reply({ content: "<:cry:1432758797352435936> No invite data.", ephemeral: true });
+        return interaction.reply({ content: "No invite data.", ephemeral: true });
 
       const total = data.joins + data.rejoin;
 
@@ -319,19 +313,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
       }
 
-const row = new ActionRowBuilder().addComponents(
-  new ButtonBuilder()
-    .setCustomId("lb_prev")
-    .setLabel("Last")
-    .setEmoji("1438799356475215912")
-    .setStyle(ButtonStyle.Secondary),
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("lb_prev")
+          .setLabel("⬅️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("lb_next")
+          .setLabel("➡️")
+          .setStyle(ButtonStyle.Secondary)
+      );
 
-  new ButtonBuilder()
-    .setCustomId("lb_next")
-    .setLabel("Next")
-    .setEmoji("1438799331938275459")
-    .setStyle(ButtonStyle.Secondary)
-);
       const msg = await interaction.reply({
         embeds: [embed(page)],
         components: [row],
@@ -344,7 +336,7 @@ const row = new ActionRowBuilder().addComponents(
 
       collector.on("collect", async (i) => {
         if (i.user.id !== interaction.user.id)
-          return i.reply({ content: "Not for you <:attack:1438807813785915422>.", ephemeral: true });
+          return i.reply({ content: "Not for you.", ephemeral: true });
 
         if (i.customId === "lb_prev")
           page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
@@ -366,18 +358,18 @@ const row = new ActionRowBuilder().addComponents(
 if (interaction.commandName === "paypal-fees") {
   const amount = interaction.options.getNumber("amount");
 
-  const fee = amount * 0.0499 + 0.6;
+  const fee = amount * 0.0449 + 0.6;
   const after = amount - fee;
   const send = amount + fee;
 
   const embed = new EmbedBuilder()
     .setColor("#009cde")
-    .setTitle("<:paypal:1430875512221339680> PayPal Fee Calculator")
+    .setTitle("💰 PayPal Fee Calculator")
     .addFields(
-      { name: "<:money:1416701478592319649> Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
-      { name: "<:WHAT:1430877202110742528> PayPal Fee", value: `$${fee.toFixed(2)}`, inline: true },
-      { name: "<:Shock:1430877169084661820> After Fee", value: `$${after.toFixed(2)}`, inline: true },
-      { name: "<:gentelman:1438856707127115856> You Send", value: `$${send.toFixed(2)}`, inline: true }
+      { name: "💵 Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
+      { name: "📊 PayPal Fee", value: `$${fee.toFixed(2)}`, inline: true },
+      { name: "📉 After Fee", value: `$${after.toFixed(2)}`, inline: true },
+      { name: "📤 You Send", value: `$${send.toFixed(2)}`, inline: true }
     )
     .setFooter({ text: "Legit Store" });
 
@@ -401,7 +393,6 @@ if (interaction.commandName === "paypal-fees") {
       new ButtonBuilder()
         .setCustomId("join_giveaway")
         .setLabel("Join Giveaway")
-        .setEmoji("1454881610724937845")
         .setStyle(ButtonStyle.Success)
     );
 
@@ -440,25 +431,25 @@ if (interaction.commandName === "paypal-fees") {
 
       const embed = new EmbedBuilder()
         .setTitle("🎫 Ticket System")
-        .setDescription("Open a Ticket <:cute:1455104071206965442>")
+        .setDescription("Choose ticket type")
         .setColor("Blue");
 
       const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId("ticket_purchase")
           .setLabel("Purchase")
-          .setEmoji("1438808044346675290")
+          .setEmoji("🛒")
           .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
           .setCustomId("ticket_seller")
-          .setLabel("Seller Application")
-          .setEmoji("1438856707127115856")
+          .setLabel("Seller")
+          .setEmoji("📦")
           .setStyle(ButtonStyle.Success),
 
         new ButtonBuilder()
           .setCustomId("ticket_report")
-          .setLabel("Report Scammer")
+          .setLabel("Report")
           .setEmoji("🚨")
           .setStyle(ButtonStyle.Danger)
       );
@@ -468,7 +459,7 @@ if (interaction.commandName === "paypal-fees") {
 
     // CLOSE
     if (interaction.commandName === "close") {
-      await interaction.reply({ content: "Bye... Don't forget to Vouch <:cute:1455104071206965442>", ephemeral: true });
+      await interaction.reply({ content: "Closing...", ephemeral: true });
       return closeTicket(interaction.channel, interaction.user);
     }
   }
@@ -487,14 +478,14 @@ if (interaction.commandName === "paypal-fees") {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("product")
-            .setLabel("What item do you want to buy ?")
+            .setLabel("Product")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("payment")
-            .setLabel("What will you pay with ?")
+            .setLabel("Payment")
             .setStyle(TextInputStyle.Short)
             .setRequired(true)
         )
@@ -512,14 +503,14 @@ if (interaction.commandName === "paypal-fees") {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("items")
-            .setLabel("Items you are selling ( With Prices )")
+            .setLabel("Items")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         ),
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("proof")
-            .setLabel("Proofs that you are Legit")
+            .setLabel("Why trust you?")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
         )
@@ -545,8 +536,8 @@ if (interaction.commandName === "paypal-fees") {
 
     if (interaction.customId === "seller_modal")
       return createTicket(interaction, "Seller", [
-        interaction.fields.getTextInputValue("items & Prices"),
-        interaction.fields.getTextInputValue("proofs"),
+        interaction.fields.getTextInputValue("items"),
+        interaction.fields.getTextInputValue("proof"),
       ]);
   }
 });
@@ -556,12 +547,12 @@ if (interaction.commandName === "paypal-fees") {
 function buildGiveawayEmbed(prize, winners, endTime, count) {
   return new EmbedBuilder()
     .setColor("#0d0d0d")
-    .setTitle("<a:Giveaway1:1454881610724937845> Legit GIVEAWAY <a:Giveaway1:1454881610724937845>")
+    .setTitle("🎉 DARK GIVEAWAY 🎉")
     .setDescription(
-`<:Giveaway:1438809324611698688> Prize: **${prize}**
+`✨ Prize: **${prize}**
 🏆 Winners: **${winners}**
 👥 Participants: **${count}**
-<:time:1477044105736618178> Ends: <t:${Math.floor(endTime / 1000)}:R>
+⏳ Ends: <t:${Math.floor(endTime / 1000)}:R>
 
 🔥 Click the button below to enter!`
     );
@@ -621,12 +612,12 @@ async function endGiveaway(id) {
     const text = winners.map((x) => `<@${x}>`).join(", ");
 
     await msg.edit({
-      content: `<a:giveaway1:1454881610724937845> Winners: ${text}`,
+      content: `🎉 Winners: ${text}`,
       embeds: [],
       components: [],
     });
 
-    channel.send(`<a:giveaway1:1454881610724937845> Congratulations ${text}! You won **${g.prize}**`);
+    channel.send(`🎉 Congratulations ${text}! You won **${g.prize}**`);
 
     for (const id of winners) {
       const member = await channel.guild.members
@@ -635,7 +626,7 @@ async function endGiveaway(id) {
 
       if (member)
         member.send(
-          `<a:giveaway1:1454881610724937845> You won **${g.prize}** in ${channel.guild.name}!`
+          `🎉 You won **${g.prize}** in ${channel.guild.name}!`
         ).catch(() => {});
     }
 
@@ -665,7 +656,7 @@ async function rerollGiveaway(id, interaction) {
   }
 
   return interaction.reply({
-    content: `<a:giveaway1:1454881610724937845> New winners: ${winners
+    content: `🎉 New winners: ${winners
       .map((x) => `<@${x}>`)
       .join(", ")}`,
   });
@@ -707,7 +698,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     return interaction.reply({
       ephemeral: true,
-      content: "Joined <:giveaway:1438809324611698688>",
+      content: "Joined 🎉",
     });
   }
 });
@@ -716,23 +707,3 @@ client.on(Events.InteractionCreate, async (interaction) => {
  * LOGIN
  ***********************/
 client.login(process.env.TOKEN);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
