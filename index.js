@@ -1,6 +1,5 @@
 require("dotenv").config();
 const fs = require("fs");
-const archiver = require("archiver");
 const ms = require("ms");
 
 const {
@@ -8,8 +7,8 @@ const {
   GatewayIntentBits,
   ActionRowBuilder,
   ButtonBuilder,
-  EmbedBuilder,
   ButtonStyle,
+  EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -19,691 +18,303 @@ const {
   REST,
   Routes,
   PermissionFlagsBits,
+  OverwriteType,
 } = require("discord.js");
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-  ],
-});
-
-/***********************
- * CONFIG
- ***********************/
-const TICKET_CATEGORY_ID = "1414954122918236171";
-const LOG_CHANNEL_ID = "1470080063792742410";
+/* ================= CONFIG ================= */
+const TOKEN = process.env.TOKEN;
 const GUILD_ID = "1412911390494036072";
+const TICKET_CATEGORY_ID = "1414954122918236171";
 const STAFF_ROLE_ID = "1414301511579598858";
 const ADMIN_ROLE_ID = "1414301511579598858";
 
 const PAYPAL_INFO = "<:paypal:1430875512221339680> **Paypal:** Ahmdla9.ahmad@gmail.com";
 const BINANCE_INFO = "<:binance:1430875529539489932> **Binance ID:** 993881216";
 
-/***********************
- * INVITE TRACKING
- ***********************/
-const INVITE_FILE = "invites.json";
-let inviteData = {};
-let guildInvites = new Map();
+const INVITES_FILE = "./invites.json";
+const GIVEAWAYS_FILE = "./giveaways.json";
 
-if (!fs.existsSync(INVITE_FILE)) fs.writeFileSync(INVITE_FILE, "{}");
+/* ================= CLIENT ================= */
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 
-function loadInvites() {
-  inviteData = JSON.parse(fs.readFileSync(INVITE_FILE));
+/* ================= STORAGE ================= */
+function load(file, def) {
+  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(def));
+  return JSON.parse(fs.readFileSync(file));
+}
+function save(file, data) {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-function saveInvites() {
-  fs.writeFileSync(INVITE_FILE, JSON.stringify(inviteData, null, 2));
+let invites = load(INVITES_FILE, {});
+let giveaways = load(GIVEAWAYS_FILE, {});
+
+/* ================= EMBEDS ================= */
+const paypalEmbed = () =>
+  new EmbedBuilder().setColor("#009cde").setTitle("💰 PayPal").setDescription(PAYPAL_INFO);
+
+const binanceEmbed = () =>
+  new EmbedBuilder().setColor("#f3ba2f").setTitle("💰 Binance").setDescription(BINANCE_INFO);
+
+const paymentEmbed = () =>
+  new EmbedBuilder().setTitle("💳 Payment Methods").setDescription(`${PAYPAL_INFO}\n\n${BINANCE_INFO}`);
+
+function paypalFeesEmbed(a) {
+  const fee = a * 0.0449 + 0.6;
+  return new EmbedBuilder()
+    .setTitle("💰 PayPal Fees")
+    .addFields(
+      { name: "Amount", value: `$${a}`, inline: true },
+      { name: "Fee", value: `$${fee.toFixed(2)}`, inline: true },
+      { name: "After", value: `$${(a - fee).toFixed(2)}`, inline: true },
+      { name: "Send", value: `$${(a + fee).toFixed(2)}`, inline: true }
+    );
 }
 
-/***********************
- * GIVEAWAY SETUP
- ***********************/
-const DATA_FILE = "giveaways.json";
-let giveaways = new Map();
-if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, "{}");
-
-function saveGiveaways() {
-  const obj = Object.fromEntries(
-    [...giveaways].map(([id, g]) => [id, { ...g, users: [...g.users] }])
+function giveawayEmbed(g) {
+  return new EmbedBuilder().setColor("#0d0d0d").setTitle("🎉 DARK GIVEAWAY 🎉").setDescription(
+    `✨ Prize: **${g.prize}**
+🏆 Winners: **${g.winners}**
+👥 Participants: **${g.users.length}**
+⏳ Ends: <t:${Math.floor(g.end / 1000)}:R>`
   );
-  fs.writeFileSync(DATA_FILE, JSON.stringify(obj, null, 2));
 }
 
-function loadGiveaways() {
-  const data = JSON.parse(fs.readFileSync(DATA_FILE));
-  for (const id in data) {
-    const g = data[id];
-    g.users = new Set(g.users);
-    giveaways.set(id, g);
-    scheduleUpdate(id);
-    const timeLeft = g.endTime - Date.now();
-    if (timeLeft > 0) setTimeout(() => endGiveaway(id), timeLeft);
-    else endGiveaway(id);
-  }
+/* ================= COMMANDS ================= */
+async function register() {
+  const cmds = [
+    new SlashCommandBuilder().setName("paypal").setDescription("paypal"),
+    new SlashCommandBuilder().setName("binance").setDescription("binance"),
+    new SlashCommandBuilder().setName("paymentmethods").setDescription("all payments"),
+    new SlashCommandBuilder().setName("paypal-fees").setDescription("fees")
+      .addNumberOption(o=>o.setName("amount").setRequired(true)),
+
+    new SlashCommandBuilder().setName("ticketpanel").setDescription("panel"),
+    new SlashCommandBuilder().setName("close").setDescription("close"),
+
+    new SlashCommandBuilder().setName("giveaway").setDescription("giveaway")
+      .addSubcommand(s=>s.setName("start")
+        .addStringOption(o=>o.setName("duration").setRequired(true))
+        .addIntegerOption(o=>o.setName("winners").setRequired(true))
+        .addStringOption(o=>o.setName("prize").setRequired(true)))
+      .addSubcommand(s=>s.setName("end")
+        .addStringOption(o=>o.setName("id").setRequired(true)))
+      .addSubcommand(s=>s.setName("reroll")
+        .addStringOption(o=>o.setName("id").setRequired(true))),
+
+    new SlashCommandBuilder().setName("invites").setDescription("invites")
+      .addUserOption(o=>o.setName("user")),
+
+    new SlashCommandBuilder().setName("invite").setDescription("invite")
+      .addSubcommand(s=>s.setName("leaderboard")),
+
+    new SlashCommandBuilder().setName("reset").setDescription("reset")
+      .addSubcommandGroup(g=>g.setName("invite")
+        .addSubcommand(s=>s.setName("user").addUserOption(o=>o.setName("target").setRequired(true)))
+        .addSubcommand(s=>s.setName("leaderboard")))
+  ].map(x=>x.toJSON());
+
+  const rest = new REST({version:"10"}).setToken(TOKEN);
+  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {body:cmds});
 }
 
-/***********************
- * READY
- ***********************/
+/* ================= READY ================= */
 client.once(Events.ClientReady, async () => {
-  console.log(`Logged in as ${client.user.tag}`);
-  loadInvites();
-  loadGiveaways();
-
-  // Cache invites
-  const guild = await client.guilds.fetch(GUILD_ID);
-  const invites = await guild.invites.fetch();
-  guildInvites.set(
-    guild.id,
-    new Map(invites.map((i) => [i.code, i.uses]))
-  );
+  console.log("READY");
+  await register();
 });
 
-/***********************
- * INVITE EVENTS
- ***********************/
-client.on(Events.GuildMemberAdd, async (member) => {
-  const cached = guildInvites.get(member.guild.id);
-  const newInvites = await member.guild.invites.fetch();
-  guildInvites.set(
-    member.guild.id,
-    new Map(newInvites.map((i) => [i.code, i.uses]))
-  );
+/* ================= INTERACTIONS ================= */
+client.on(Events.InteractionCreate, async i => {
 
-  const used = newInvites.find((i) => cached.get(i.code) < i.uses);
-  if (!used) return;
+  /* ===== COMMANDS ===== */
+  if (i.isChatInputCommand()) {
 
-  const inviter = used.inviter;
-  if (!inviter) return;
+    if (i.commandName === "paypal") return i.reply({embeds:[paypalEmbed()]});
+    if (i.commandName === "binance") return i.reply({embeds:[binanceEmbed()]});
+    if (i.commandName === "paymentmethods") return i.reply({embeds:[paymentEmbed()]});
 
-  if (!inviteData[inviter.id])
-    inviteData[inviter.id] = { joins: 0, rejoin: 0, last: [] };
-
-  if (inviteData[inviter.id].last.includes(member.id)) {
-    inviteData[inviter.id].rejoin++;
-  } else {
-    inviteData[inviter.id].joins++;
-  }
-
-  inviteData[inviter.id].last.push(member.id);
-  saveInvites();
-});
-
-client.on(Events.InviteCreate, async (invite) => {
-  const invites = await invite.guild.invites.fetch();
-  guildInvites.set(
-    invite.guild.id,
-    new Map(invites.map((i) => [i.code, i.uses]))
-  );
-});
-
-client.on(Events.InviteDelete, async (invite) => {
-  const invites = await invite.guild.invites.fetch();
-  guildInvites.set(
-    invite.guild.id,
-    new Map(invites.map((i) => [i.code, i.uses]))
-  );
-});
-
-/***********************
- * REGISTER COMMANDS
- ***********************/
-async function registerCommands() {
-  const commands = [
-
-    new SlashCommandBuilder()
-      .setName("invites")
-      .setDescription("Show invite stats")
-      .addUserOption((o) =>
-        o.setName("user").setDescription("Target user")
-      ),
-
-    new SlashCommandBuilder()
-      .setName("resetinvites")
-      .setDescription("Reset ALL invites")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-      .setName("leaderboard")
-      .setDescription("Invite leaderboard"),
-
-    new SlashCommandBuilder()
-      .setName("ticketpanel")
-      .setDescription("Open ticket panel")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-      .setName("close")
-      .setDescription("Close ticket")
-      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
-
-    new SlashCommandBuilder()
-      .setName("paypal-fees")
-      .setDescription("Calculate PayPal fees")
-      .addNumberOption((o) =>
-        o.setName("amount").setDescription("Amount").setRequired(true)
-      ),
-
-    new SlashCommandBuilder()
-      .setName("paypal")
-      .setDescription("Show PayPal"),
-
-    new SlashCommandBuilder()
-      .setName("binance")
-      .setDescription("Show Binance"),
-
-    new SlashCommandBuilder()
-      .setName("payment-methods")
-      .setDescription("Show all payment methods"),
-
-    new SlashCommandBuilder()
-      .setName("giveaway")
-      .setDescription("Giveaway system")
-      .addSubcommand((s) =>
-        s.setName("start")
-          .setDescription("Start giveaway")
-          .addStringOption((o) =>
-            o.setName("duration").setDescription("10m 1h 1d").setRequired(true)
-          )
-          .addIntegerOption((o) =>
-            o.setName("winners").setDescription("Winners").setRequired(true)
-          )
-          .addStringOption((o) =>
-            o.setName("prize").setDescription("Prize").setRequired(true)
-          )
-      )
-      .addSubcommand((s) =>
-        s.setName("reroll")
-          .setDescription("Reroll")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true)
-          )
-      )
-      .addSubcommand((s) =>
-        s.setName("end")
-          .setDescription("End giveaway")
-          .addStringOption((o) =>
-            o.setName("message_id").setRequired(true)
-          )
-      )
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-
-  ].map(c => c.toJSON());
-
-  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
-    body: commands,
-  });
-
-  console.log("✅ Commands registered");
-}
-/***********************
- * INTERACTIONS
- ***********************/
-client.on(Events.InteractionCreate, async (interaction) => {
-
-  if (interaction.isChatInputCommand()) {
-
-    // INVITES
-    if (interaction.commandName === "invites") {
-      const user = interaction.options.getUser("user") || interaction.user;
-      const data = inviteData[user.id];
-
-      if (!data)
-        return interaction.reply({ content: "No invite data.", ephemeral: true });
-
-      const total = data.joins + data.rejoin;
-
-      const embed = new EmbedBuilder()
-        .setColor("#00ff99")
-        .setTitle("📨 Invite Stats")
-        .addFields(
-          { name: "Joins", value: `${data.joins}`, inline: true },
-          { name: "Rejoins", value: `${data.rejoin}`, inline: true },
-          { name: "Total", value: `${total}`, inline: true }
-        );
-
-      return interaction.reply({ embeds: [embed] });
+    if (i.commandName === "paypal-fees") {
+      const a = i.options.getNumber("amount");
+      return i.reply({embeds:[paypalFeesEmbed(a)]});
     }
 
-    // RESET INVITES (يصفّر الليدر بورد)
-    if (interaction.commandName === "resetinvites") {
-      inviteData = {};
-      saveInvites();
-
-      return interaction.reply("✅ All invites reset. Leaderboard is now 0.");
+    if (i.commandName === "ticketpanel") {
+      return i.reply({
+        embeds:[new EmbedBuilder().setTitle("🎫 Ticket System")],
+        components:[new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("buy").setLabel("Purchase").setEmoji("🛒").setStyle(1),
+          new ButtonBuilder().setCustomId("sell").setLabel("Seller").setEmoji("📦").setStyle(3),
+          new ButtonBuilder().setCustomId("report").setLabel("Report").setEmoji("🚨").setStyle(4)
+        )]
+      });
     }
 
-    // LEADERBOARD (يعتمد على البيانات المخزنة فقط)
-    if (interaction.commandName === "leaderboard") {
+    if (i.commandName === "close") {
+      if (!i.channel.topic?.includes("ticket")) return i.reply({content:"not ticket",ephemeral:true});
+      i.reply("closing...");
+      setTimeout(()=>i.channel.delete(),3000);
+    }
 
-      const sorted = Object.entries(inviteData)
-        .map(([id, d]) => ({
-          id,
-          total: d.joins + d.rejoin,
-        }))
-        .sort((a, b) => b.total - a.total);
+    if (i.commandName === "giveaway") {
+      const sub = i.options.getSubcommand();
 
-      if (!sorted.length)
-        return interaction.reply("No invite data yet.");
+      if (sub === "start") {
+        const dur = ms(i.options.getString("duration"));
+        const g = {
+          prize:i.options.getString("prize"),
+          winners:i.options.getInteger("winners"),
+          end:Date.now()+dur,
+          users:[]
+        };
 
-      const perPage = 10;
-      let page = 0;
+        const msg = await i.reply({
+          embeds:[giveawayEmbed(g)],
+          components:[new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("join").setLabel("Join").setStyle(3)
+          )],
+          fetchReply:true
+        });
 
-      function embed(page) {
-        const start = page * perPage;
-        const users = sorted.slice(start, start + perPage);
+        giveaways[msg.id]=g;
+        save(GIVEAWAYS_FILE,giveaways);
 
-        return new EmbedBuilder()
-          .setTitle("🏆 Invite Leaderboard")
-          .setColor("#FFD700")
-          .setDescription(
-            users
-              .map((u, i) =>
-                `${start + i + 1}. <@${u.id}> — **${u.total}**`
-              )
-              .join("\n")
-          )
-          .setFooter({
-            text: `Page ${page + 1}/${Math.ceil(sorted.length / perPage)}`,
-          });
+        setTimeout(()=>endGiveaway(msg.id),dur);
       }
 
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("lb_prev")
-          .setLabel("⬅️")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId("lb_next")
-          .setLabel("➡️")
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      const msg = await interaction.reply({
-        embeds: [embed(page)],
-        components: [row],
-        fetchReply: true,
-      });
-
-      const collector = msg.createMessageComponentCollector({
-        time: 60000,
-      });
-
-      collector.on("collect", async (i) => {
-        if (i.user.id !== interaction.user.id)
-          return i.reply({ content: "Not for you.", ephemeral: true });
-
-        if (i.customId === "lb_prev")
-          page = page > 0 ? page - 1 : Math.ceil(sorted.length / perPage) - 1;
-
-        if (i.customId === "lb_next")
-          page = page < Math.ceil(sorted.length / perPage) - 1 ? page + 1 : 0;
-
-        await i.update({ embeds: [embed(page)] });
-      });
+      if (sub === "end") endGiveaway(i.options.getString("id"));
+      if (sub === "reroll") reroll(i.options.getString("id"),i);
     }
 
-    // PAYMENTS
-    if (interaction.commandName === "paypal")
-      return interaction.reply(PAYPAL_INFO);
-
-    if (interaction.commandName === "binance")
-      return interaction.reply(BINANCE_INFO);
-
-if (interaction.commandName === "paypal-fees") {
-  const amount = interaction.options.getNumber("amount");
-
-  const fee = amount * 0.0449 + 0.6;
-  const after = amount - fee;
-  const send = amount + fee;
-
-  const embed = new EmbedBuilder()
-    .setColor("#009cde")
-    .setTitle("💰 PayPal Fee Calculator")
-    .addFields(
-      { name: "💵 Original Amount", value: `$${amount.toFixed(2)}`, inline: true },
-      { name: "📊 PayPal Fee", value: `$${fee.toFixed(2)}`, inline: true },
-      { name: "📉 After Fee", value: `$${after.toFixed(2)}`, inline: true },
-      { name: "📤 You Send", value: `$${send.toFixed(2)}`, inline: true }
-    )
-    .setFooter({ text: "Legit Store" });
-
-  return interaction.reply({ embeds: [embed] });
-}
-    if (interaction.commandName === "payment-methods") {
-  return interaction.reply(`${PAYPAL_INFO}\n${BINANCE_INFO}`);
-}
-    if (interaction.commandName === "giveaway") {
-  const sub = interaction.options.getSubcommand();
-
-  if (sub === "start") {
-    const duration = interaction.options.getString("duration");
-    const winners = interaction.options.getInteger("winners");
-    const prize = interaction.options.getString("prize");
-
-    const endTime = Date.now() + ms(duration);
-
-    const embed = buildGiveawayEmbed(prize, winners, endTime, 0);
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("join_giveaway")
-        .setLabel("Join Giveaway")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    const msg = await interaction.reply({
-      embeds: [embed],
-      components: [row],
-      fetchReply: true,
-    });
-
-    giveaways.set(msg.id, {
-      prize,
-      winners,
-      endTime,
-      users: new Set(),
-      channelId: msg.channel.id,
-    });
-
-    saveGiveaways();
-    scheduleUpdate(msg.id);
-    setTimeout(() => endGiveaway(msg.id), ms(duration));
-  }
-
-  if (sub === "reroll")
-    return rerollGiveaway(
-      interaction.options.getString("message_id"),
-      interaction
-    );
-
-  if (sub === "end") {
-    await endGiveaway(interaction.options.getString("message_id"));
-    return interaction.reply({ content: "Ended", ephemeral: true });
-  }
-}
-    // TICKET PANEL
-    if (interaction.commandName === "ticketpanel") {
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Ticket System")
-        .setDescription("Choose ticket type")
-        .setColor("Blue");
-
-      const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_purchase")
-          .setLabel("Purchase")
-          .setEmoji("🛒")
-          .setStyle(ButtonStyle.Primary),
-
-        new ButtonBuilder()
-          .setCustomId("ticket_seller")
-          .setLabel("Seller")
-          .setEmoji("📦")
-          .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder()
-          .setCustomId("ticket_report")
-          .setLabel("Report")
-          .setEmoji("🚨")
-          .setStyle(ButtonStyle.Danger)
-      );
-
-      return interaction.reply({ embeds: [embed], components: [buttons] });
+    if (i.commandName === "invites") {
+      const u = i.options.getUser("user")||i.user;
+      const d = invites[u.id]||{joins:0};
+      return i.reply(`Invites: ${d.joins}`);
     }
 
-    // CLOSE
-    if (interaction.commandName === "close") {
-      await interaction.reply({ content: "Closing...", ephemeral: true });
-      return closeTicket(interaction.channel, interaction.user);
+    if (i.commandName === "invite") {
+      const list = Object.entries(invites).sort((a,b)=>b[1].joins-a[1].joins);
+      return i.reply(list.map((x,i)=>`${i+1}. <@${x[0]}> ${x[1].joins}`).join("\n"));
+    }
+
+    if (i.commandName === "reset") {
+      invites={}; save(INVITES_FILE,invites);
+      return i.reply("reset done");
     }
   }
 
-  /***********************
-   * BUTTONS
-   ***********************/
-  if (interaction.isButton()) {
+  /* ===== BUTTONS ===== */
+  if (i.isButton()) {
 
-    if (interaction.customId === "ticket_purchase") {
-      const modal = new ModalBuilder()
-        .setCustomId("purchase_modal")
-        .setTitle("Purchase");
-
-      modal.addComponents(
+    if (i.customId==="buy") {
+      const m=new ModalBuilder().setCustomId("buym").setTitle("شراء");
+      m.addComponents(
         new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("product")
-            .setLabel("Product")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
+          new TextInputBuilder().setCustomId("p").setLabel("شو بدك").setStyle(1)
         ),
         new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("payment")
-            .setLabel("Payment")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true)
+          new TextInputBuilder().setCustomId("pay").setLabel("طريقة الدفع").setStyle(1)
         )
       );
-
-      return interaction.showModal(modal);
+      return i.showModal(m);
     }
 
-    if (interaction.customId === "ticket_seller") {
-      const modal = new ModalBuilder()
-        .setCustomId("seller_modal")
-        .setTitle("Seller");
-
-      modal.addComponents(
+    if (i.customId==="sell") {
+      const m=new ModalBuilder().setCustomId("sellm").setTitle("Seller");
+      m.addComponents(
         new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("items")
-            .setLabel("Items")
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
+          new TextInputBuilder().setCustomId("items").setLabel("items").setStyle(2)
         ),
         new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId("proof")
-            .setLabel("Why trust you?")
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
+          new TextInputBuilder().setCustomId("proof").setLabel("proof").setStyle(2)
         )
       );
-
-      return interaction.showModal(modal);
+      return i.showModal(m);
     }
 
-    if (interaction.customId === "ticket_report")
-      return createTicket(interaction, "Report", ["🚨 Scam"]);
+    if (i.customId==="report") return createTicket(i,"Report",["🚨 Scam"]);
+
+    if (i.customId==="join") {
+      const g=giveaways[i.message.id];
+      if (!g) return i.reply({content:"ended",ephemeral:true});
+      if (g.users.includes(i.user.id)) return i.reply({content:"joined",ephemeral:true});
+      g.users.push(i.user.id);
+      save(GIVEAWAYS_FILE,giveaways);
+      i.message.edit({embeds:[giveawayEmbed(g)]});
+      return i.reply({content:"joined 🎉",ephemeral:true});
+    }
   }
 
-  /***********************
-   * MODALS
-   ***********************/
-  if (interaction.isModalSubmit()) {
-
-    if (interaction.customId === "purchase_modal")
-      return createTicket(interaction, "Purchase", [
-        `🛒 ${interaction.fields.getTextInputValue("product")}`,
-        `💳 ${interaction.fields.getTextInputValue("payment")}`,
+  /* ===== MODALS ===== */
+  if (i.isModalSubmit()) {
+    if (i.customId==="buym") {
+      return createTicket(i,"Purchase",[
+        `🛒 ${i.fields.getTextInputValue("p")}`,
+        `💳 ${i.fields.getTextInputValue("pay")}`
       ]);
+    }
 
-    if (interaction.customId === "seller_modal")
-      return createTicket(interaction, "Seller", [
-        interaction.fields.getTextInputValue("items"),
-        interaction.fields.getTextInputValue("proof"),
+    if (i.customId==="sellm") {
+      return createTicket(i,"Seller",[
+        i.fields.getTextInputValue("items"),
+        i.fields.getTextInputValue("proof")
       ]);
+    }
   }
+
 });
-/***********************
- * GIVEAWAY SYSTEM
- ***********************/
-function buildGiveawayEmbed(prize, winners, endTime, count) {
-  return new EmbedBuilder()
-    .setColor("#0d0d0d")
-    .setTitle("🎉 DARK GIVEAWAY 🎉")
-    .setDescription(
-`✨ Prize: **${prize}**
-🏆 Winners: **${winners}**
-👥 Participants: **${count}**
-⏳ Ends: <t:${Math.floor(endTime / 1000)}:R>
 
-🔥 Click the button below to enter!`
-    );
+/* ================= TICKET ================= */
+async function createTicket(i,type,data) {
+  const ch=await i.guild.channels.create({
+    name:`ticket-${i.user.username}`,
+    type:ChannelType.GuildText,
+    parent:TICKET_CATEGORY_ID,
+    topic:"ticket",
+    permissionOverwrites:[
+      {id:i.guild.id,deny:[PermissionFlagsBits.ViewChannel]},
+      {id:i.user.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages]},
+      {id:STAFF_ROLE_ID,allow:[PermissionFlagsBits.ViewChannel]}
+    ]
+  });
+
+  await ch.send({
+    content:`${i.user}`,
+    embeds:[new EmbedBuilder().setTitle(type).setDescription(data.join("\n"))],
+    components:[new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("ticket_close").setLabel("Close").setStyle(4)
+    )]
+  });
+
+  i.reply({content:`Ticket: ${ch}`,ephemeral:true});
 }
 
-function scheduleUpdate(id) {
-  setInterval(async () => {
-    const g = giveaways.get(id);
-    if (!g) return;
-
-    try {
-      const channel = await client.channels.fetch(g.channelId);
-      const msg = await channel.messages.fetch(id);
-
-      const embed = buildGiveawayEmbed(
-        g.prize,
-        g.winners,
-        g.endTime,
-        g.users.size
-      );
-
-      msg.edit({ embeds: [embed] });
-    } catch {}
-  }, 60000);
-}
-
-/***********************
- * END GIVEAWAY
- ***********************/
+/* ================= GIVEAWAY ================= */
 async function endGiveaway(id) {
-  const g = giveaways.get(id);
+  const g=giveaways[id];
   if (!g) return;
 
-  try {
-    const channel = await client.channels.fetch(g.channelId);
-    const msg = await channel.messages.fetch(id);
+  const ch=await client.channels.fetch(g.channelId).catch(()=>null);
+  const users=g.users;
 
-    if (!g.users.size) {
-      await msg.edit({
-        content: "No participants",
-        embeds: [],
-        components: [],
-      });
-      giveaways.delete(id);
-      saveGiveaways();
-      return;
-    }
+  if (!users.length) return;
 
-    const entries = [...g.users];
-    const winners = [];
-
-    while (winners.length < Math.min(g.winners, entries.length)) {
-      const rand = entries[Math.floor(Math.random() * entries.length)];
-      if (!winners.includes(rand)) winners.push(rand);
-    }
-
-    const text = winners.map((x) => `<@${x}>`).join(", ");
-
-    await msg.edit({
-      content: `🎉 Winners: ${text}`,
-      embeds: [],
-      components: [],
-    });
-
-    channel.send(`🎉 Congratulations ${text}! You won **${g.prize}**`);
-
-    for (const id of winners) {
-      const member = await channel.guild.members
-        .fetch(id)
-        .catch(() => null);
-
-      if (member)
-        member.send(
-          `🎉 You won **${g.prize}** in ${channel.guild.name}!`
-        ).catch(() => {});
-    }
-
-    giveaways.delete(id);
-    saveGiveaways();
-
-  } catch {}
-}
-
-/***********************
- * REROLL
- ***********************/
-async function rerollGiveaway(id, interaction) {
-  const g = giveaways.get(id);
-  if (!g)
-    return interaction.reply({
-      ephemeral: true,
-      content: "Giveaway not found.",
-    });
-
-  const entries = [...g.users];
-  const winners = [];
-
-  while (winners.length < Math.min(g.winners, entries.length)) {
-    const rand = entries[Math.floor(Math.random() * entries.length)];
-    if (!winners.includes(rand)) winners.push(rand);
+  const winners=[];
+  while(winners.length<Math.min(g.winners,users.length)){
+    const r=users[Math.floor(Math.random()*users.length)];
+    if(!winners.includes(r)) winners.push(r);
   }
 
-  return interaction.reply({
-    content: `🎉 New winners: ${winners
-      .map((x) => `<@${x}>`)
-      .join(", ")}`,
-  });
+  ch.send(`🎉 Winners: ${winners.map(x=>`<@${x}>`).join(", ")}`);
 }
 
-/***********************
- * GIVEAWAY BUTTON
- ***********************/
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isButton()) return;
-
-  if (interaction.customId === "join_giveaway") {
-    const g = giveaways.get(interaction.message.id);
-
-    if (!g)
-      return interaction.reply({
-        ephemeral: true,
-        content: "This giveaway ended.",
-      });
-
-    if (g.users.has(interaction.user.id))
-      return interaction.reply({
-        ephemeral: true,
-        content: "Already joined.",
-      });
-
-    g.users.add(interaction.user.id);
-
-    const embed = buildGiveawayEmbed(
-      g.prize,
-      g.winners,
-      g.endTime,
-      g.users.size
-    );
-
-    await interaction.message.edit({ embeds: [embed] });
-
-    saveGiveaways();
-
-    return interaction.reply({
-      ephemeral: true,
-      content: "Joined 🎉",
-    });
-  }
-});
-
-/***********************
- * LOGIN
- ***********************/
-client.login(process.env.TOKEN);
+/* ================= LOGIN ================= */
+client.login(TOKEN);
