@@ -78,7 +78,6 @@ function normalizeInviteData(raw) {
     return { users: {}, members: {} };
   }
 
-  // إذا كان الملف قديم على شكل { userId: { joins: 0 } }
   if (!raw.users && !raw.members) {
     return { users: raw, members: {} };
   }
@@ -101,18 +100,22 @@ function isStaff(member) {
   if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
   if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
   if (member.permissions.has(PermissionFlagsBits.ManageChannels)) return true;
+
   return (
-    member.roles.cache.has(STAFF_ROLE_ID) || member.roles.cache.has(ADMIN_ROLE_ID)
+    member.roles?.cache?.has(STAFF_ROLE_ID) ||
+    member.roles?.cache?.has(ADMIN_ROLE_ID)
   );
 }
 
 function sanitizeChannelName(text) {
-  return String(text)
-    .toLowerCase()
-    .replace(/[^a-z0-9\-_]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 70) || "ticket";
+  return (
+    String(text)
+      .toLowerCase()
+      .replace(/[^a-z0-9\-_]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 70) || "ticket"
+  );
 }
 
 function getInviteUserRecord(userId) {
@@ -209,17 +212,25 @@ function ticketEmbed(type, lines, user) {
 }
 
 function giveawayEmbed(g, ended = false, winnersText = null) {
+  const userCount = Array.isArray(g.users) ? g.users.length : 0;
+  const winnersCount =
+    typeof g.winners === "number" && g.winners > 0 ? g.winners : 1;
+  const prizeText = typeof g.prize === "string" ? g.prize : "Unknown Prize";
+
   const parts = [
-    `✨ Prize: **${g.prize}**`,
-    `🏆 Winners: **${g.winners}**`,
-    `👥 Participants: **${g.users.length}**`,
+    `✨ Prize: **${prizeText}**`,
+    `🏆 Winners: **${winnersCount}**`,
+    `👥 Participants: **${userCount}**`,
   ];
 
   if (ended) {
     parts.push("⏹️ Status: **Ended**");
     if (winnersText) parts.push(`🎉 Winner(s): ${winnersText}`);
   } else {
-    parts.push(`⏳ Ends: <t:${Math.floor(g.end / 1000)}:R>`);
+    const endUnix = g.end
+      ? Math.floor(g.end / 1000)
+      : Math.floor(Date.now() / 1000);
+    parts.push(`⏳ Ends: <t:${endUnix}:R>`);
   }
 
   return new EmbedBuilder()
@@ -259,7 +270,7 @@ function leaderboardEmbed(guild, list) {
 async function safeLogTicket(guild, embed) {
   if (!LOG_CHANNEL_ID) return;
   const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
-  if (!logChannel) return;
+  if (!logChannel || !logChannel.isTextBased()) return;
   await logChannel.send({ embeds: [embed] }).catch(() => null);
 }
 
@@ -289,20 +300,32 @@ async function findOpenTicketForUser(guild, userId) {
 
 async function fetchGiveawayMessage(g) {
   if (!g?.channelId || !g?.messageId) return { channel: null, message: null };
-  const channel = await client.channels.fetch(g.channelId).catch(() => null);
-  if (!channel || !channel.isTextBased()) return { channel: null, message: null };
-  const message = await channel.messages.fetch(g.messageId).catch(() => null);
+
+  const channel = await client.channels.fetch(g.channelId).catch((err) => {
+    console.error("Failed to fetch giveaway channel:", err);
+    return null;
+  });
+
+  if (!channel || !channel.isTextBased()) {
+    return { channel: null, message: null };
+  }
+
+  const message = await channel.messages.fetch(g.messageId).catch((err) => {
+    console.error("Failed to fetch giveaway message:", err);
+    return null;
+  });
+
   return { channel, message };
 }
 
 function pickWinners(users, count) {
-  const pool = [...users];
+  const safeUsers = Array.isArray(users) ? [...users] : [];
   const winners = [];
 
-  while (winners.length < Math.min(count, pool.length)) {
-    const index = Math.floor(Math.random() * pool.length);
-    winners.push(pool[index]);
-    pool.splice(index, 1);
+  while (winners.length < Math.min(count, safeUsers.length)) {
+    const index = Math.floor(Math.random() * safeUsers.length);
+    winners.push(safeUsers[index]);
+    safeUsers.splice(index, 1);
   }
 
   return winners;
@@ -316,6 +339,8 @@ function ensureGiveawayShape(giveawayId) {
   if (typeof g.ended !== "boolean") g.ended = false;
   if (!Array.isArray(g.lastWinners)) g.lastWinners = [];
   if (!g.messageId) g.messageId = giveawayId;
+  if (typeof g.winners !== "number" || g.winners < 1) g.winners = 1;
+  if (typeof g.prize !== "string") g.prize = "Unknown Prize";
 
   return g;
 }
@@ -375,7 +400,10 @@ async function register() {
               .setRequired(true)
           )
           .addStringOption((o) =>
-            o.setName("prize").setDescription("Giveaway prize").setRequired(true)
+            o
+              .setName("prize")
+              .setDescription("Giveaway prize")
+              .setRequired(true)
           )
       )
       .addSubcommand((s) =>
@@ -415,7 +443,9 @@ async function register() {
       .setName("invite")
       .setDescription("Invite commands")
       .addSubcommand((s) =>
-        s.setName("leaderboard").setDescription("Show invite leaderboard")
+        s
+          .setName("leaderboard")
+          .setDescription("Show invite leaderboard")
       ),
 
     new SlashCommandBuilder()
@@ -457,7 +487,6 @@ client.once(Events.ClientReady, async () => {
 
   await register();
 
-  // تحميل كاش الدعوات
   for (const guild of client.guilds.cache.values()) {
     try {
       const invites = await guild.invites.fetch();
@@ -467,7 +496,6 @@ client.once(Events.ClientReady, async () => {
     }
   }
 
-  // إعادة جدولة القيف أوايات بعد إعادة التشغيل
   for (const giveawayId of Object.keys(giveaways)) {
     const g = ensureGiveawayShape(giveawayId);
     if (!g || g.ended) continue;
@@ -545,7 +573,6 @@ client.on(Events.GuildMemberRemove, async (member) => {
 /* ================= INTERACTIONS ================= */
 client.on(Events.InteractionCreate, async (i) => {
   try {
-    /* ===== COMMANDS ===== */
     if (i.isChatInputCommand()) {
       if (i.commandName === "paypal") {
         return i.reply({ embeds: [paypalEmbed()] });
@@ -598,7 +625,10 @@ client.on(Events.InteractionCreate, async (i) => {
 
       if (i.commandName === "close") {
         if (!i.channel || !i.channel.topic?.startsWith("ticket:")) {
-          return i.reply({ content: "This is not a ticket channel.", ephemeral: true });
+          return i.reply({
+            content: "This is not a ticket channel.",
+            ephemeral: true,
+          });
         }
 
         const ownerId = getTicketOwnerIdFromTopic(i.channel.topic);
@@ -668,31 +698,37 @@ client.on(Events.InteractionCreate, async (i) => {
           return;
         }
 
-if (sub === "end") {
-  const id = i.options.getString("id").trim();
+        if (sub === "end") {
+          const id = i.options.getString("id").trim();
 
-  const g = giveaways[id];
+          console.log("Manual giveaway end requested for ID:", id);
+          console.log("Stored giveaway IDs:", Object.keys(giveaways));
 
-  if (!g) {
-    console.log("❌ ID entered:", id);
-    console.log("📂 Stored IDs:", Object.keys(giveaways));
+          const g = giveaways[id];
+          if (!g) {
+            return i.reply({
+              content: "Giveaway not found.",
+              ephemeral: true,
+            });
+          }
 
-    return i.reply({
-      content: "Giveaway not found.",
-      ephemeral: true,
-    });
-  }
+          const result = await endGiveaway(id);
 
-  await endGiveaway(id);
+          if (!result.ok) {
+            return i.reply({
+              content: `Failed to end giveaway: ${result.message}`,
+              ephemeral: true,
+            });
+          }
 
-  return i.reply({
-    content: `Giveaway \`${id}\` ended.`,
-    ephemeral: true,
-  });
-}
+          return i.reply({
+            content: `Giveaway \`${id}\` ended successfully.`,
+            ephemeral: true,
+          });
+        }
 
         if (sub === "reroll") {
-          const id = i.options.getString("id");
+          const id = i.options.getString("id").trim();
           const result = await rerollGiveaway(id);
 
           if (!result.ok) {
@@ -711,7 +747,12 @@ if (sub === "end") {
 
       if (i.commandName === "invites") {
         const user = i.options.getUser("user") || i.user;
-        const stats = inviteData.users[user.id] || { joins: 0, leaves: 0, current: 0 };
+        const stats = inviteData.users[user.id] || {
+          joins: 0,
+          leaves: 0,
+          current: 0,
+        };
+
         return i.reply({ embeds: [invitesEmbed(user, stats)] });
       }
 
@@ -763,7 +804,6 @@ if (sub === "end") {
       }
     }
 
-    /* ===== BUTTONS ===== */
     if (i.isButton()) {
       if (i.customId === "buy") {
         const existing = await findOpenTicketForUser(i.guild, i.user.id);
@@ -920,7 +960,6 @@ if (sub === "end") {
       }
     }
 
-    /* ===== MODALS ===== */
     if (i.isModalSubmit()) {
       if (i.customId === "buym") {
         return createTicket(i, "Purchase", [
@@ -1057,73 +1096,99 @@ async function closeTicketChannel(channel, closedByUser, reason = "Closed") {
 
 /* ================= GIVEAWAY ================= */
 async function endGiveaway(id) {
-  const g = ensureGiveawayShape(id);
-  if (!g || g.ended) return false;
+  try {
+    const g = giveaways[id];
 
-  const { channel, message } = await fetchGiveawayMessage(g);
+    if (!g) {
+      return { ok: false, message: "Giveaway data not found in memory." };
+    }
 
-  const winners = pickWinners(g.users, g.winners);
-  g.ended = true;
-  g.lastWinners = winners;
-  save(GIVEAWAYS_FILE, giveaways);
+    if (!Array.isArray(g.users)) g.users = [];
+    if (typeof g.winners !== "number" || g.winners < 1) g.winners = 1;
+    if (typeof g.prize !== "string") g.prize = "Unknown Prize";
+    if (typeof g.ended !== "boolean") g.ended = false;
+    if (!Array.isArray(g.lastWinners)) g.lastWinners = [];
+    if (!g.messageId) g.messageId = id;
 
-  const winnersText = winners.length
-    ? winners.map((x) => `<@${x}>`).join(", ")
-    : "No valid participants";
+    if (g.ended) {
+      return { ok: true, message: "Already ended." };
+    }
 
-  if (message) {
-    await message
-      .edit({
+    const { channel, message } = await fetchGiveawayMessage(g);
+
+    const winners = pickWinners(g.users, g.winners);
+    g.ended = true;
+    g.lastWinners = winners;
+    save(GIVEAWAYS_FILE, giveaways);
+
+    const winnersText = winners.length
+      ? winners.map((x) => `<@${x}>`).join(", ")
+      : "No valid participants";
+
+    if (message) {
+      await message.edit({
         embeds: [giveawayEmbed(g, true, winnersText)],
         components: [giveawayJoinRow(true)],
-      })
-      .catch(() => null);
-  }
+      }).catch((err) => {
+        console.error("Failed to edit giveaway message:", err);
+      });
+    }
 
-  if (channel) {
-    await channel
-      .send(
+    if (channel && channel.isTextBased()) {
+      await channel.send(
         winners.length
           ? `🎉 Giveaway ended!\nPrize: **${g.prize}**\nWinner(s): ${winnersText}`
           : `⏹️ Giveaway ended!\nPrize: **${g.prize}**\nNo participants joined.`
-      )
-      .catch(() => null);
-  }
+      ).catch((err) => {
+        console.error("Failed to send giveaway result message:", err);
+      });
+    }
 
-  return true;
+    return { ok: true, message: "Ended successfully." };
+  } catch (error) {
+    console.error("endGiveaway error:", error);
+    return { ok: false, message: error.message || "Unknown error." };
+  }
 }
 
 async function rerollGiveaway(id) {
-  const g = ensureGiveawayShape(id);
-  if (!g) {
-    return { ok: false, message: "Giveaway not found." };
-  }
+  try {
+    const g = ensureGiveawayShape(id);
+    if (!g) {
+      return { ok: false, message: "Giveaway not found." };
+    }
 
-  if (!g.users.length) {
-    return { ok: false, message: "No participants to reroll from." };
-  }
+    if (!g.users.length) {
+      return { ok: false, message: "No participants to reroll from." };
+    }
 
-  const winners = pickWinners(g.users, g.winners);
-  g.lastWinners = winners;
-  save(GIVEAWAYS_FILE, giveaways);
+    const winners = pickWinners(g.users, g.winners);
+    g.lastWinners = winners;
+    save(GIVEAWAYS_FILE, giveaways);
 
-  const winnersText = winners.map((x) => `<@${x}>`).join(", ");
-  const { channel, message } = await fetchGiveawayMessage(g);
+    const winnersText = winners.map((x) => `<@${x}>`).join(", ");
+    const { channel, message } = await fetchGiveawayMessage(g);
 
-  if (message) {
-    await message
-      .edit({
+    if (message) {
+      await message.edit({
         embeds: [giveawayEmbed(g, true, winnersText)],
         components: [giveawayJoinRow(true)],
-      })
-      .catch(() => null);
-  }
+      }).catch((err) => {
+        console.error("Failed to edit reroll message:", err);
+      });
+    }
 
-  if (channel) {
-    await channel.send(`🔄 Giveaway rerolled!\nNew winner(s): ${winnersText}`).catch(() => null);
-  }
+    if (channel && channel.isTextBased()) {
+      await channel.send(`🔄 Giveaway rerolled!\nNew winner(s): ${winnersText}`).catch((err) => {
+        console.error("Failed to send reroll result:", err);
+      });
+    }
 
-  return { ok: true, winnersText };
+    return { ok: true, winnersText };
+  } catch (error) {
+    console.error("rerollGiveaway error:", error);
+    return { ok: false, message: error.message || "Unknown error." };
+  }
 }
 
 /* ================= SAFETY LOGS ================= */
