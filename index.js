@@ -668,23 +668,28 @@ client.on(Events.InteractionCreate, async (i) => {
           return;
         }
 
-        if (sub === "end") {
-          const id = i.options.getString("id");
-          const exists = ensureGiveawayShape(id);
+if (sub === "end") {
+  const id = i.options.getString("id").trim();
 
-          if (!exists) {
-            return i.reply({
-              content: "Giveaway not found.",
-              ephemeral: true,
-            });
-          }
+  const g = giveaways[id];
 
-          await endGiveaway(id);
-          return i.reply({
-            content: `Giveaway \`${id}\` ended.`,
-            ephemeral: true,
-          });
-        }
+  if (!g) {
+    console.log("❌ ID entered:", id);
+    console.log("📂 Stored IDs:", Object.keys(giveaways));
+
+    return i.reply({
+      content: "Giveaway not found.",
+      ephemeral: true,
+    });
+  }
+
+  await endGiveaway(id);
+
+  return i.reply({
+    content: `Giveaway \`${id}\` ended.`,
+    ephemeral: true,
+  });
+}
 
         if (sub === "reroll") {
           const id = i.options.getString("id");
