@@ -1,0 +1,16 @@
+{
+  "name": "Legit-Bot",
+  "version": "1.0.0",
+  "description": "Legit Bot With Everything",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Adojhnam",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1",
+    "ms": "^2.1.3"
+  }
+}
